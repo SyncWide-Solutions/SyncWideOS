@@ -1,3 +1,4 @@
+; Just an old backup file of the kernel
 org 0x7C00
 bits 16
 
