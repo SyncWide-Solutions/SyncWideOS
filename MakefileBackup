@@ -1,3 +1,5 @@
+# DO NOT MODIFY THIS FILE
+
 ASM=nasm
 
 SRC_DIR=src
@@ -30,7 +32,9 @@ $(BUILD_DIR)/bootloader.bin: always
 kernel: $(BUILD_DIR)/kernel.bin
 
 $(BUILD_DIR)/kernel.bin: always
-	$(ASM) $(SRC_DIR)/kernel/main.asm -f bin -o $(BUILD_DIR)/kernel.bin
+	$(ASM) $(SRC_DIR)/kernel/main.asm -f bin -o $(BUILD_DIR)/main.bin
+	$(ASM) $(SRC_DIR)/kernel/dhcp.asm -f bin -o $(BUILD_DIR)/dhcp.bin
+	cat $(BUILD_DIR)/main.bin $(BUILD_DIR)/dhcp.bin > $(BUILD_DIR)/kernel.bin
 
 #
 # Always

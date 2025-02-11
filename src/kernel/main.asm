@@ -1,15 +1,21 @@
+; Just an old backup file of the kernel
 org 0x7C00
 bits 16
 
+
 %define ENDL 0x0D, 0x0A
 
-%include "src/kernel/dhcp.asm"  ; Include the DHCP handler
 
 start:
     jmp main
 
-; Renamed puts to puts_main to avoid conflict
-puts_main:
+
+;
+; Prints a string to the screen
+; Params:
+;   - ds:si points to string
+;
+puts:
     ; save registers we will modify
     push si
     push ax
@@ -31,7 +37,7 @@ puts_main:
     pop ax
     pop si    
     ret
-    
+
 clear_screen:
     ; clear the screen
     mov ax, 0x0003      ; function to set video mode (text mode)
@@ -39,9 +45,8 @@ clear_screen:
     ret
 
 main:
-    call clear_screen    ; clear the screen
 
-    call dhcp_handler     ; call the network handler
+    call clear_screen
 
     ; setup data segments
     mov ax, 0           ; can't set ds/es directly
@@ -54,25 +59,32 @@ main:
 
     ; print hello world message
     mov si, msg_line
-    call puts_main       ; Call the renamed puts function
+    call puts
 
     mov si, msg_info
-    call puts_main       ; Call the renamed puts function
+    call puts
 
     mov si, msg_line
-    call puts_main       ; Call the renamed puts function
+    call puts
 
     mov si, msg_empty
-    call puts_main       ; Call the renamed puts function
+    call puts
 
+    mov si, msg_version
+    call puts
+    
     hlt
 
 .halt:
     jmp .halt
 
+
+
 msg_line: db '--------------------------------------', ENDL, 0
 msg_info: db '| SyncWide OS | https://os.syncwi.de |', ENDL, 0
 msg_empty: db '', ENDL, 0
+msg_version: db 'SyncWide OS version 0.1', ENDL, 0
 
-times 510-($-$) db 0
+
+times 510-($-$$) db 0
 dw 0AA55h
