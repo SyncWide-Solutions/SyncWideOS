@@ -37,42 +37,31 @@ puts:
     pop ax
     pop si    
     ret
-
+    
+; Clear screen function
 clear_screen:
-    ; clear the screen
-    mov ax, 0x0003      ; function to set video mode (text mode)
-    int 0x10
-    ret
-
-; Sound routine - Add this after your existing procedures
-play_sound:
-    ; save registers
     push ax
     push bx
     push cx
-    
-    mov al, 182         ; Prepare the speaker for the note
-    out 43h, al         
-    mov ax, 2280        ; Frequency number (higher = lower sound)
-    out 42h, al         ; Output low byte
-    mov al, ah          ; Output high byte
-    out 42h, al 
-    in al, 61h         ; Turn on note (get value from port 61h)
-    or al, 00000011b   ; Set bits 1 and 0
-    out 61h, al        ; Send new value
-    
-    ; Add delay for sound duration
-    mov cx, 0xFFFF
-    
-.delay:
-    loop .delay
-    
-    ; Turn off speaker
-    in al, 61h         ; Turn off note (get value from port 61h)
-    and al, 11111100b  ; Reset bits 1 and 0
-    out 61h, al        ; Send new value
-    
-    ; restore registers
+    push dx
+
+    mov ah, 0x00    ; Set video mode function
+    mov al, 0x03    ; Text mode 80x25 16 colors
+    int 0x10        ; BIOS video interrupt
+
+    mov ah, 0x06    ; Scroll up function
+    mov al, 0x00    ; Clear entire screen
+    mov bh, 0x07    ; White on black attribute
+    mov cx, 0x0000  ; Upper left corner (0,0)
+    mov dx, 0x184F  ; Lower right corner (79,24)
+    int 0x10        ; BIOS video interrupt
+
+    mov ah, 0x02    ; Set cursor position
+    mov bh, 0x00    ; Page 0
+    mov dx, 0x0000  ; Row 0, Column 0
+    int 0x10        ; BIOS video interrupt
+
+    pop dx
     pop cx
     pop bx
     pop ax
@@ -81,8 +70,6 @@ play_sound:
 main:
 
     call clear_screen
-
-    call play_sound
 
     ; setup data segments
     mov ax, 0           ; can't set ds/es directly
