@@ -2,19 +2,22 @@ ASM=nasm
 
 SRC_DIR=src
 BUILD_DIR=build
+ISO_NAME=syncwideos.iso
 
-.PHONY: all floppy_image kernel bootloader clean always
+.PHONY: all iso_image kernel bootloader clean always
 
 #
-# Floppy image
+# ISO image
 #
-floppy_image: $(BUILD_DIR)/main_floppy.img
+all: iso_image
 
-$(BUILD_DIR)/main_floppy.img: bootloader kernel
-	dd if=/dev/zero of=$(BUILD_DIR)/main_floppy.img bs=512 count=2880
-	mkfs.fat -F 12 -n "SWOS" $(BUILD_DIR)/main_floppy.img
-	dd if=$(BUILD_DIR)/bootloader.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
-	cp $(BUILD_DIR)/kernel.bin $(BUILD_DIR)/main_floppy.img
+iso_image: $(BUILD_DIR)/$(ISO_NAME)
+
+$(BUILD_DIR)/$(ISO_NAME): bootloader kernel
+	mkdir -p $(BUILD_DIR)/iso
+	cp $(BUILD_DIR)/bootloader.bin $(BUILD_DIR)/iso/
+	cp $(BUILD_DIR)/kernel.bin $(BUILD_DIR)/iso/
+	genisoimage -o $(BUILD_DIR)/$(ISO_NAME) -b bootloader.bin -no-emul-boot -boot-load-size 4 -boot-info-table -iso-level 3 -J -R $(BUILD_DIR)/iso/
 
 #
 # Bootloader
@@ -44,5 +47,8 @@ always:
 clean:
 	rm -rf $(BUILD_DIR)/*
 
+#
+# Run
+#
 run:
-	qemu-system-x86_64 -fda $(BUILD_DIR)/main_floppy.img
+	qemu-system-x86_64 -cdrom $(BUILD_DIR)/$(ISO_NAME)
