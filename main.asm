@@ -37,7 +37,18 @@ puts:
     pop ax
     pop si    
     ret
-    
+
+clear_screen:
+    mov ax, 0x0003      ; set video mode to 80x25 text mode
+    int 0x10            ; call BIOS interrupt to set video mode
+
+    mov ax, 0x0600      ; function to scroll up the entire screen
+    mov bh, 0x07        ; attribute (light gray on black)
+    mov cx, 0           ; upper left corner (row 0, column 0)
+    mov dx, 0x184F      ; lower right corner (row 24, column 79)
+    int 0x10            ; call BIOS interrupt to clear the screen
+
+    ret
 
 main:
     ; setup data segments
@@ -49,7 +60,9 @@ main:
     mov ss, ax
     mov sp, 0x7C00      ; stack grows downwards from where we are loaded in memory
 
-    ; print hello world message
+    ; clear screen
+    call clear_screen
+
     mov si, msg_line
     call puts
 

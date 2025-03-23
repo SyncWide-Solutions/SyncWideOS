@@ -27,7 +27,6 @@ puts:
 
     mov ah, 0x0E        ; call bios interrupt
     mov bh, 0           ; set page number to 0
-    mov bl, 0x0F        ; set color to white
     int 0x10
 
     jmp .loop
@@ -60,7 +59,7 @@ main:
     mov ss, ax
     mov sp, 0x7C00      ; stack grows downwards from where we are loaded in memory
 
-    ; clear the screen
+    ; clear screen
     call clear_screen
 
     ; print hello world message
@@ -84,10 +83,13 @@ main:
 .halt:
     jmp .halt
 
+
+
 msg_line: db '--------------------------------------', ENDL, 0
 msg_info: db '| SyncWide OS | https://os.syncwi.de |', ENDL, 0
 msg_empty: db '', ENDL, 0
 msg_version: db 'SyncWide OS version 0.1', ENDL, 0
+
 
 times 510-($-$$) db 0
 dw 0AA55h
