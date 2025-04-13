@@ -41,10 +41,12 @@ run:
 
 # This is only for GitHub Actions
 test:
-	qemu-system-x86_64 \
-	-fda build/main_floppy.img \
-	-net nic \
-	-net user \
-	-nographic \
-	-serial mon:stdio \
-	-display none
+	timeout 10s qemu-system-x86_64 \
+		-drive file=build/main_floppy.img,format=raw,if=floppy \
+		-net nic \
+		-net user \
+		-nographic \
+		-serial mon:stdio \
+		-display none \
+		-no-reboot | tee qemu.log ; \
+		grep -q "BOOT OK" qemu.log

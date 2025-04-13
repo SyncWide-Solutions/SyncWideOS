@@ -123,10 +123,11 @@ main:
     sti
 
     call clear_screen
-    call dhcp_process
 
     mov si, success_msg   ; Success message for GitHub Actions
     call puts
+
+    call dhcp_process
 
     hlt                   ; or loop forever if needed
 
