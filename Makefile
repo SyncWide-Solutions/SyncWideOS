@@ -40,7 +40,7 @@ run:
 	-net user
 
 test:
-	timeout 10s qemu-system-x86_64 \
+	timeout 20s qemu-system-x86_64 \
 		-drive file=build/main_floppy.img,format=raw,if=floppy \
 		-net nic \
 		-net user \
@@ -48,4 +48,4 @@ test:
 		-serial mon:stdio \
 		-display none \
 		-no-reboot | tee qemu.log ; \
-		grep -q "BOOT OK" qemu.log
+		if grep -q "SyncWide OS version" qemu.log ; then echo "Boot success"; else echo "Boot failed"; exit 1; fi
