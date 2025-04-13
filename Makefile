@@ -32,17 +32,19 @@ always:
 clean:
 	rm -rf $(BUILD_DIR)/*
 
+# Please don't edit this
 run:
 	qemu-system-x86_64 \
 	-fda $(BUILD_DIR)/main_floppy.img \
 	-net nic \
 	-net user
 
+# This is only for GitHub Actions
 test:
 	qemu-system-x86_64 \
-	-fda $(BUILD_DIR)/main_floppy.img \
+	-fda build/main_floppy.img \
 	-net nic \
 	-net user \
-	-m 512M \
 	-nographic \
-	-append "console=ttyS0"
+	-serial mon:stdio \
+	-display none
