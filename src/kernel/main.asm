@@ -125,6 +125,14 @@ main:
     call clear_screen
     call dhcp_process
 
+    mov si, success_msg   ; Success message for GitHub Actions
+    call puts
+
+    hlt                   ; or loop forever if needed
+
+success_msg:
+    db "OS BOOT SUCCESS", 0
+
 .halt:
     jmp .halt
 
