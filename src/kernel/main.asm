@@ -1,104 +1,42 @@
+; Just an old backup file of the kernel
 org 0x7C00
 bits 16
 
+
 %define ENDL 0x0D, 0x0A
-%define NETWORK_PORT 0x300
-%define DHCP_SERVER_PORT 67
-%define DHCP_CLIENT_PORT 68
 
-; DHCP Message Types
-%define DHCP_DISCOVER 1
-%define DHCP_OFFER 2
-%define DHCP_REQUEST 3
-%define DHCP_ACK 5
 
-; Network interface structure
-struc NetIntf
-    .ethAddr resb 6     ; Ethernet address
-    .ipAddr resb 4      ; IP address
-endstruc
+start:
+    jmp main
 
+
+;
+; Prints a string to the screen
+; Params:
+;   - ds:si points to string
+;
 puts:
     ; save registers we will modify
     push si
     push ax
     push bx
 
-; Global network interface
-global network_interface
-network_interface:
-    istruc NetIntf
-        at NetIntf.ethAddr, db 0x52, 0x54, 0x00, 0x12, 0x34, 0x56
-        at NetIntf.ipAddr, db 0,0,0,0
-    iend
+.loop:
+    lodsb               ; loads next character in al
+    or al, al           ; verify if next character is null?
+    jz .done
 
-; DHCP Discover Packet Template
-dhcp_discover_packet:
-    ; Implement basic DHCP discover packet structure
-    db 0x01           ; Message type: BOOTREQUEST
-    db 0x01           ; Hardware type: Ethernet
-    db 0x06           ; Hardware address length
-    db 0x00           ; Hops
-    dd 0x1234         ; Transaction ID
-    dw 0x0000         ; Seconds elapsed
-    dw 0x8000         ; Broadcast flag
-    times 4 db 0x00   ; Client IP address
-    times 4 db 0x00   ; Your IP address
-    times 4 db 0x00   ; Server IP address
-    times 4 db 0x00   ; Gateway IP address
-    times 6 db 0x52   ; Client MAC address
-    times 10 db 0x00  ; Padding
-    times 64 db 0x00  ; Server name
-    times 128 db 0x00 ; Boot filename
-    dd 0x63825363     ; Magic cookie
-    db 53, 1, DHCP_DISCOVER  ; DHCP Message Type
-    db 255            ; End of options
+    mov ah, 0x0E        ; call bios interrupt
+    mov bh, 0           ; set page number to 0
+    int 0x10
 
-dhcp_discover_packet_end:
-
-; DHCP Process Function
-dhcp_process:
-    call init_network
-
-    ; Send DHCP discover packet
-    mov si, dhcp_discover_packet
-    mov cx, dhcp_discover_packet_end - dhcp_discover_packet
-    mov dx, NETWORK_PORT
-
-.send_packet:
-    lodsb
-    out dx, al
-    loop .send_packet
-
-    ; Wait and check for response
-    mov cx, 5000
-.wait_response:
-    dec cx
-    jz .timeout
-
-    ; TODO: Implement actual packet reception
-    ; Check for DHCP offer
-
-    jmp .done
-
-.timeout:
-    mov si, msg_dhcp_timeout
-    call puts
-    jmp .done
+    jmp .loop
 
 .done:
+    pop bx
+    pop ax
+    pop si    
     ret
-
-; Network Initialization
-init_network:
-    mov dx, NETWORK_PORT
-    mov al, 0x01
-    out dx, al
-    ret
-
-; Messages
-msg_dhcp_timeout: db 'DHCP Timeout', ENDL, 0
-msg_dhcp_offer: db 'DHCP Offer Received', ENDL, 0
 
 clear_screen:
     mov ax, 0x0003      ; set video mode to 80x25 text mode
@@ -112,31 +50,46 @@ clear_screen:
 
     ret
 
-; Main Routine
 main:
-    cli
-    xor ax, ax
+    ; setup data segments
+    mov ax, 0           ; can't set ds/es directly
     mov ds, ax
     mov es, ax
+    
+    ; setup stack
     mov ss, ax
-    mov sp, 0x7C00
-    sti
+    mov sp, 0x7C00      ; stack grows downwards from where we are loaded in memory
 
+    ; clear screen
     call clear_screen
 
-    mov si, success_msg   ; Success message for GitHub Actions
+    mov si, msg_line
     call puts
 
-    call dhcp_process
+    mov si, msg_info
+    call puts
 
-    hlt                   ; or loop forever if needed
+    mov si, msg_line
+    call puts
 
-success_msg:
-    db "OS BOOT SUCCESS", 0
+    mov si, msg_empty
+    call puts
+
+    mov si, msg_version
+    call puts
+    
+    hlt
 
 .halt:
     jmp .halt
 
-; Standard bootloader padding
-times 510 - ($ - $$) db 0
-dw 0xAA55
+
+
+msg_line: db '--------------------------------------', ENDL, 0
+msg_info: db '| SyncWide OS | https://os.syncwi.de |', ENDL, 0
+msg_empty: db '', ENDL, 0
+msg_version: db 'SyncWide OS version 0.1', ENDL, 0
+
+
+times 510-($-$$) db 0
+dw 0AA55h
