@@ -37,3 +37,12 @@ run:
 	-fda $(BUILD_DIR)/main_floppy.img \
 	-net nic \
 	-net user
+
+test:
+	qemu-system-x86_64 \
+	-fda $(BUILD_DIR)/main_floppy.img \
+	-net nic \
+	-net user \
+	-m 512M \
+	-nographic \
+	-append "console=ttyS0"

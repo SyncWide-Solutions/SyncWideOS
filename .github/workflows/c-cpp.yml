@@ -1,4 +1,4 @@
-name: C/C++ CI
+name: Build and Test OS
 
 on:
   push:
@@ -17,5 +17,5 @@ jobs:
     - uses: actions/checkout@v4
     - name: make
       run: make
-    - name: make run
-      run: make run
+    - name: make test
+      run: make test
