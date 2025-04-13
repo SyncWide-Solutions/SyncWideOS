@@ -39,7 +39,6 @@ run:
 	-net nic \
 	-net user
 
-# This is only for GitHub Actions
 test:
 	timeout 10s qemu-system-x86_64 \
 		-drive file=build/main_floppy.img,format=raw,if=floppy \

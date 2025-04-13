@@ -1,14 +1,10 @@
-; Just an old backup file of the kernel
 org 0x7C00
 bits 16
 
-
 %define ENDL 0x0D, 0x0A
-
 
 start:
     jmp main
-
 
 ;
 ; Prints a string to the screen
@@ -50,6 +46,45 @@ clear_screen:
 
     ret
 
+check_timer:
+    push ax
+    push cx
+    push dx
+
+    ; Get system time
+    mov ah, 0x00        ; Function to get system time
+    int 0x1A            ; BIOS interrupt for timer
+
+    ; Compare elapsed time (in clock ticks)
+    ; Assuming 18.2 ticks per second, 7 seconds = ~126 ticks
+    cmp dx, 126         ; Check if 7 seconds have passed
+    jae .shutdown_sequence
+
+    jmp .timer_done
+    
+.shutdown_sequence:
+    ; Clear screen first
+    call clear_screen
+
+    ; Then show shutdown message
+    mov si, msg_shutdown
+    call puts
+    
+    ; Try alternative shutdown methods
+    mov ax, 0x5307      ; Power off interrupt
+    mov bx, 0x0001      ; All devices
+    mov cx, 0x0003      ; Power off
+    int 0x15
+    
+    cli                 ; Clear interrupts
+    hlt                 ; Halt the system
+
+.timer_done:
+    pop dx
+    pop cx
+    pop ax
+    ret
+
 main:
     ; setup data segments
     mov ax, 0           ; can't set ds/es directly
@@ -60,7 +95,7 @@ main:
     mov ss, ax
     mov sp, 0x7C00      ; stack grows downwards from where we are loaded in memory
 
-    ; clear screen
+    ; clear screen initially
     call clear_screen
 
     mov si, msg_line
@@ -77,19 +112,16 @@ main:
 
     mov si, msg_version
     call puts
-    
-    hlt
 
-.halt:
-    jmp .halt
-
-
+.timer_loop:
+    call check_timer    ; Check timer
+    jmp .timer_loop
 
 msg_line: db '--------------------------------------', ENDL, 0
 msg_info: db '| SyncWide OS | https://os.syncwi.de |', ENDL, 0
 msg_empty: db '', ENDL, 0
 msg_version: db 'SyncWide OS version 0.1', ENDL, 0
-
+msg_shutdown: db 'System shutting down...', ENDL, 0
 
 times 510-($-$$) db 0
 dw 0AA55h
