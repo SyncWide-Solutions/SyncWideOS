@@ -112,16 +112,44 @@ void terminal_writestring(const char* data)
 	terminal_write(data, strlen(data));
 }
 
+void outb(uint16_t port, uint8_t value) {
+    asm volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
+}
+
+void update_cursor(int row, int col) {
+    unsigned short position = (row * VGA_WIDTH) + col;
+
+    // Cursor Low Port (0x3D4)
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (unsigned char)(position & 0xFF));
+    // Cursor High Port (0x3D4)
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
+}
+
 void kernel_main(void) 
 {
-	/* Initialize terminal interface */
-	terminal_initialize();
+    /* Initialize terminal interface */
+    terminal_initialize();
 
-	/* Newline support is left as an exercise. */
-	terminal_writestring("------------------------------------\n");
+    /* Newline support is left as an exercise. */
+    terminal_setcolor(VGA_COLOR_LIGHT_CYAN);
+    terminal_writestring("------------------------------------\n");
     terminal_writestring("|      Welcome to SyncWide OS      |\n");
     terminal_writestring("|       https://os.syncwi.de       |\n");
     terminal_writestring("|                                  |\n");
     terminal_writestring("|         Version: 0.1.0gb         |\n");
     terminal_writestring("------------------------------------\n");
+    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    terminal_writestring("\n");
+    terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
+    terminal_writestring("admin@syncwideos");
+    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    terminal_writestring(":");
+    terminal_setcolor(VGA_COLOR_CYAN);
+    terminal_writestring("~");
+    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    terminal_writestring("$ ");
+
+    update_cursor(terminal_row, terminal_column);
 }
