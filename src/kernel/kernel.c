@@ -1,6 +1,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "../include/string.h"
+#include "../include/keyboard.h"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -127,12 +129,11 @@ void update_cursor(int row, int col) {
     outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
 }
 
-void kernel_main(void) 
-{
+void kernel_main(void) {
     /* Initialize terminal interface */
     terminal_initialize();
 
-    /* Newline support is left as an exercise. */
+    /* Existing terminal output code */
     terminal_setcolor(VGA_COLOR_LIGHT_CYAN);
     terminal_writestring("------------------------------------\n");
     terminal_writestring("|      Welcome to SyncWide OS      |\n");
@@ -150,6 +151,15 @@ void kernel_main(void)
     terminal_writestring("~");
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("$ ");
-
+    
     update_cursor(terminal_row, terminal_column);
+
+    // Initialize keyboard
+    keyboard_init();
+
+    // Get and print a key
+    char key = keyboard_get_key();
+    if (key != 0) {
+        terminal_writestring(key);
+    }
 }

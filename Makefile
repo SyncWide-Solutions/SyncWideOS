@@ -10,10 +10,14 @@ boot:
 	i686-elf-as $(SRC_DIR)/bootloader/boot.s -o $(BUILD_DIR)/boot.o
 
 kernel: $(SRC_DIR)/kernel/kernel.c
-	i686-elf-gcc -c $(SRC_DIR)/kernel/kernel.c -o $(BUILD_DIR)/kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+	i686-elf-gcc -c $(SRC_DIR)/kernel/kernel.c -o $(BUILD_DIR)/kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
 
-link: boot kernel
-	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o -lgcc
+drivers:
+	i686-elf-gcc -c $(SRC_DIR)/drivers/keyboard.c -o $(BUILD_DIR)/keyboard.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
+
+link: boot kernel drivers
+	i686-elf-gcc -c $(SRC_DIR)/kernel/stubs.c -o $(BUILD_DIR)/stubs.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
+	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/stubs.o -lgcc
 
 grub: link
 	grub-file --is-x86-multiboot $(BUILD_DIR)/myos.bin
