@@ -93,15 +93,12 @@ enum KEYCODE {
 #define KBD_SEND(byt) outportb(0x64, byt);
 
 /* This is a late init, must end with _kill() */
-void keyboard_init()
-{
-	mprint("PS/2 Keyboard init sequence activated.\n");
-	keycache = (uint8_t*)malloc(256);
-	memset(keycache, 0, 256);
-	/* Install IRQ */
-	set_int(33, (uint32_t)keyboard_irq);
-	__kbd_enabled = 1;
-	_kill(); /* end me */
+void keyboard_init() {
+    mprint("PS/2 Keyboard init sequence activated.\n");
+    keycache = (uint8_t*)malloc(256);  // Allocate key cache
+    memset(keycache, 0, 256);          // Clear key cache
+    set_int(33, (uint32_t)keyboard_irq);  // Set interrupt handler for IRQ 1 (keyboard)
+    __kbd_enabled = 1;                 // Mark keyboard as enabled
 }
 
 uint8_t keyboard_enabled()
@@ -119,20 +116,20 @@ void keyboard_read_key()
 
 DEFINE_MUTEX(m_getkey);
 static char c = 0;
-char keyboard_get_key()
-{
-	mutex_lock(&m_getkey);
-	c = 0;
-	if(key_loc == 0) goto out;
-	c = *keycache;
-	key_loc --;
-	for(int i = 0; i < 256; i++)
-	{
-		keycache[i] = keycache[i+1];
-	}
+char keyboard_get_key() {
+    mutex_lock(&m_getkey);
+    c = 0;
+    if(key_loc == 0) goto out;
+    c = *keycache;  // Get first key from cache
+    key_loc--;      // Reduce cache location
+    
+    // Shift remaining keys in cache
+    for(int i = 0; i < 256; i++) {
+        keycache[i] = keycache[i+1];
+    }
 out:
-	mutex_unlock(&m_getkey);
-	return c;
+    mutex_unlock(&m_getkey);
+    return c;
 }
 static char* _qwertzuiop = "qwertzuiop"; // 0x10-0x1c
 static char* _asdfghjkl = "asdfghjkl";
@@ -162,10 +159,9 @@ uint8_t keyboard_to_ascii(uint8_t key)
 	return 0;
 }
 
-
 void keyboard_irq() {
     IRQ_START;
-    keycache[key_loc++] = keyboard_to_ascii(inportb(0x60));
-    send_eoi(1);
+    keycache[key_loc++] = keyboard_to_ascii(inportb(0x60));  // Read scancode, convert to ASCII, store in cache
+    send_eoi(1);  // Send End of Interrupt
     IRQ_END;
 }

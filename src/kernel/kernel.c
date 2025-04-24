@@ -44,13 +44,13 @@ static inline uint16_t vga_entry(unsigned char uc, uint8_t color)
 	return (uint16_t) uc | (uint16_t) color << 8;
 }
 
-size_t strlen(const char* str) 
-{
-	size_t len = 0;
-	while (str[len])
-		len++;
-	return len;
-}
+// size_t strlen(const char* str) 
+// {
+// 	size_t len = 0;
+// 	while (str[len])
+// 		len++;
+// 	return len;
+// }
 
 #define VGA_WIDTH   80
 #define VGA_HEIGHT  25
@@ -86,12 +86,19 @@ void terminal_putentryat(char c, uint8_t color, size_t x, size_t y)
 	terminal_buffer[index] = vga_entry(c, color);
 }
 
-void terminal_putchar(char c) 
-{
+void terminal_putchar(char c) {
     if (c == '\n') {
         terminal_column = 0;
         if (++terminal_row == VGA_HEIGHT)
             terminal_row = 0;
+        return;
+    }
+    
+    if (c == '\b') {  // Backspace handling
+        if (terminal_column > 0) {
+            terminal_column--;
+            terminal_putentryat(' ', terminal_color, terminal_column, terminal_row);
+        }
         return;
     }
 
@@ -129,6 +136,14 @@ void update_cursor(int row, int col) {
     outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
 }
 
+size_t strlen(const char* str) 
+{
+    size_t len = 0;
+    while (str[len])
+        len++;
+    return len;
+}
+
 void kernel_main(void) {
     /* Initialize terminal interface */
     terminal_initialize();
@@ -154,7 +169,7 @@ void kernel_main(void) {
     
     update_cursor(terminal_row, terminal_column);
     
-    // Simply call keyboard_init without checking return value
+    // Initialize keyboard
     keyboard_init();
 
     // Main input loop
@@ -162,7 +177,19 @@ void kernel_main(void) {
         char key = keyboard_get_key();
         
         if (key != 0) {
-            terminal_putchar(key);
+            // Handle special keys or control characters if needed
+            switch (key) {
+                case '\b':  // Backspace
+                    if (terminal_column > 0) {
+                        terminal_column--;
+                        terminal_putchar(' ');
+                        terminal_column--;
+                    }
+                    break;
+                default:
+                    terminal_putchar(key);
+            }
+            
             update_cursor(terminal_row, terminal_column);
         }
     }    
