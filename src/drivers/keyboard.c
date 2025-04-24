@@ -163,10 +163,9 @@ uint8_t keyboard_to_ascii(uint8_t key)
 }
 
 
-void keyboard_irq()
-{
-	IRQ_START;
-	keycache[key_loc++] = keyboard_to_ascii(inportb(0x60));
-	send_eoi(1);
-	IRQ_END;
+void keyboard_irq() {
+    IRQ_START;
+    keycache[key_loc++] = keyboard_to_ascii(inportb(0x60));
+    send_eoi(1);
+    IRQ_END;
 }

@@ -153,13 +153,17 @@ void kernel_main(void) {
     terminal_writestring("$ ");
     
     update_cursor(terminal_row, terminal_column);
-
-    // Initialize keyboard
+    
+    // Simply call keyboard_init without checking return value
     keyboard_init();
 
-    // Get and print a key
-    char key = keyboard_get_key();
-    if (key != 0) {
-        terminal_writestring(key);
-    }
+    // Main input loop
+    while (1) {
+        char key = keyboard_get_key();
+        
+        if (key != 0) {
+            terminal_putchar(key);
+            update_cursor(terminal_row, terminal_column);
+        }
+    }    
 }

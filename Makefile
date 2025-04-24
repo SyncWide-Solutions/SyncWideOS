@@ -17,7 +17,7 @@ drivers:
 
 link: boot kernel drivers
 	i686-elf-gcc -c $(SRC_DIR)/kernel/stubs.c -o $(BUILD_DIR)/stubs.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
-	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/stubs.o -lgcc
+	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/stubs.o $(BUILD_DIR)/kernel.o -lgcc
 
 grub: link
 	grub-file --is-x86-multiboot $(BUILD_DIR)/myos.bin
