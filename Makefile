@@ -6,18 +6,14 @@ $(shell mkdir -p $(BUILD_DIR))
 
 all: grub
 
-boot: 
+boot:
 	i686-elf-as $(SRC_DIR)/bootloader/boot.s -o $(BUILD_DIR)/boot.o
 
 kernel: $(SRC_DIR)/kernel/kernel.c
 	i686-elf-gcc -c $(SRC_DIR)/kernel/kernel.c -o $(BUILD_DIR)/kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
 
-drivers:
-	i686-elf-gcc -c $(SRC_DIR)/drivers/keyboard.c -o $(BUILD_DIR)/keyboard.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
-
-link: boot kernel drivers
-	i686-elf-gcc -c $(SRC_DIR)/kernel/stubs.c -o $(BUILD_DIR)/stubs.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
-	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/stubs.o $(BUILD_DIR)/kernel.o -lgcc
+link: boot kernel
+	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o -lgcc
 
 grub: link
 	grub-file --is-x86-multiboot $(BUILD_DIR)/myos.bin
@@ -26,12 +22,22 @@ grub: link
 	cp $(SRC_DIR)/grub.cfg $(BUILD_DIR)/isodir/boot/grub/grub.cfg
 	grub-mkrescue -o $(BUILD_DIR)/myos.iso $(BUILD_DIR)/isodir
 
+build_floppy: link
+	dd if=/dev/zero of=$(BUILD_DIR)/floppy.img bs=1474560 count=1
+	dd if=$(BUILD_DIR)/myos.bin of=$(BUILD_DIR)/floppy.img conv=notrunc
+
 clean:
 	rm -rf $(BUILD_DIR)
 
 run:
 	qemu-system-x86_64 \
 	-fda $(BUILD_DIR)/myos.iso \
+	-net nic \
+	-net user
+
+run_floppy:
+	qemu-system-x86_64 \
+	-fda $(BUILD_DIR)/floppy.img \
 	-net nic \
 	-net user
 

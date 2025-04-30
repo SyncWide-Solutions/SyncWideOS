@@ -1,12 +1,19 @@
-#ifndef __KEYBOARD_H_
-#define __KEYBOARD_H_
+#ifndef KEYBOARD_H
+#define KEYBOARD_H
+
 #include <stdint.h>
 
-extern void keyboard_init();
-extern uint8_t keyboard_enabled();
-extern char keyboard_get_key();
-extern uint8_t keyboard_to_ascii(uint8_t key);
-extern void keyboard_read_key();  // Add this line
-extern uint8_t lastkey;  // Add this line to declare the external variable
+// Initialize the keyboard driver
+void keyboard_init(void);
 
-#endif
+// Get a key from the keyboard buffer
+// Returns 0 if no key is available
+char keyboard_get_key(void);
+
+// Poll the keyboard for input
+void keyboard_poll(void);
+
+// Process a keyboard scancode
+void keyboard_process_scancode(uint8_t scancode);
+
+#endif /* KEYBOARD_H */
