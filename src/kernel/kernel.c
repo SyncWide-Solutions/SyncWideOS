@@ -280,7 +280,7 @@ void kernel_main(void) {
     terminal_writestring("|      Welcome to SyncWide OS      |\n");
     terminal_writestring("|       https://os.syncwi.de       |\n");
     terminal_writestring("|                                  |\n");
-    terminal_writestring("|         Version: 0.1.0gb         |\n");
+    terminal_writestring("|         Version: 0.5.2gb         |\n");
     terminal_writestring("------------------------------------\n");
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("\n");

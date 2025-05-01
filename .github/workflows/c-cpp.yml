@@ -27,3 +27,14 @@ jobs:
         
         - name: make test
           run: make test
+          
+        - name: Upload build artifacts
+          uses: actions/upload-artifact@v3
+          with:
+            name: syncwide-os-build
+            path: |
+              *.bin
+              *.img
+              *.iso
+              build/
+            retention-days: 7
