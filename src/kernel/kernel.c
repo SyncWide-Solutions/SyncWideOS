@@ -250,6 +250,18 @@ void process_command(const char* cmd) {
         return;
     }
     
+    // Check for "echo" command
+    if (strncmp(cmd, "echo", cmd_length) == 0 && cmd_length == 4) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the echo command
+        cmd_echo(args);
+        print_prompt();
+        return;
+    }
+    
     // Unknown command
     terminal_writestring("Unknown command: ");
     terminal_write(cmd, cmd_length);

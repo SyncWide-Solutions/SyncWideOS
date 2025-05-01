@@ -8,5 +8,6 @@
 void terminal_clear(void);
 void print_prompt(void);
 int strncmp(const char *s1, const char *s2, size_t n);
+void cmd_echo(const char* args);
 
 #endif
