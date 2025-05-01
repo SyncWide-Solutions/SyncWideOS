@@ -1,13 +1,19 @@
 #ifndef COMMANDS_H
 #define COMMANDS_H
 
-#include <stddef.h>
-#include <stdint.h>
-
-// Function prototypes for commands
-void terminal_clear(void);
-void print_prompt(void);
-int strncmp(const char *s1, const char *s2, size_t n);
+// Existing command declarations
 void cmd_echo(const char* args);
+void cmd_system(const char* args);
+void terminal_clear(void);
 
-#endif
+// New filesystem command declarations
+void cmd_ls(const char* args);
+void cmd_cd(const char* args);
+void cmd_mkdir(const char* args);
+void cmd_touch(const char* args);
+void cmd_cat(const char* args);
+void cmd_pwd(void);
+void cmd_read(const char* args);
+void cmd_help(const char* args);
+
+#endif /* COMMANDS_H */

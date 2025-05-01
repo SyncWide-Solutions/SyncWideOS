@@ -4,7 +4,9 @@
 #include "../include/string.h"
 #include "../include/keyboard.h"
 #include "../include/commands.h"
+#include "../include/filesystem.h"
 #include "../include/vga.h"
+#include "../include/io.h"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -20,37 +22,6 @@ size_t terminal_row;
 size_t terminal_column;
 uint8_t terminal_color;
 uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
-
-/* Port I/O functions */
-static inline void outb(uint16_t port, uint8_t value) {
-    asm volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
-}
-
-static inline uint8_t inb(uint16_t port) {
-    uint8_t value;
-    asm volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
-    return value;
-}
-
-size_t strlen(const char* str) 
-{
-    size_t len = 0;
-    while (str[len])
-        len++;
-    return len;
-}
-
-int strncmp(const char *s1, const char *s2, size_t n) {
-    while (n && *s1 && (*s1 == *s2)) {
-        ++s1;
-        ++s2;
-        --n;
-    }
-    if (n == 0) {
-        return 0;
-    }
-    return (*(unsigned char *)s1 - *(unsigned char *)s2);
-}
  
 #define MAX_COMMAND_LENGTH 256
 char current_command[MAX_COMMAND_LENGTH];
@@ -227,6 +198,27 @@ void update_cursor(int row, int col) {
     outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
 }
 
+// Function declarations
+void print_prompt(void) {
+    char path_buffer[FS_MAX_PATH_LENGTH];
+    
+    terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
+    terminal_writestring("admin@syncwideos");
+    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    terminal_writestring(":");
+    
+    // Get the current directory path
+    fs_node_t* current_dir = fs_get_cwd();
+    fs_get_path(current_dir, path_buffer, FS_MAX_PATH_LENGTH);
+    
+    terminal_setcolor(VGA_COLOR_CYAN);
+    terminal_writestring(path_buffer);
+    
+    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    terminal_writestring("$ ");
+    update_cursor(terminal_row, terminal_column);
+}
+
 void process_command(const char* cmd) {
     // Skip leading spaces
     while (*cmd == ' ') cmd++;
@@ -243,6 +235,17 @@ void process_command(const char* cmd) {
         return;
     }
     
+    if (strncmp(cmd, "help", cmd_length) == 0 && cmd_length == 4) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the help command
+        cmd_help(args);
+        print_prompt();
+        return;
+    }
+
     // Check for "clear" command
     if (strncmp(cmd, "clear", cmd_length) == 0 && cmd_length == 5) {
         terminal_clear();
@@ -262,24 +265,70 @@ void process_command(const char* cmd) {
         return;
     }
     
+    // Check for "system" command
+    if (strncmp(cmd, "system", cmd_length) == 0 && cmd_length == 6) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the system command
+        cmd_system(args);
+        print_prompt();
+        return;
+    }
+    
+    // Check for "ls" command
+    if (strncmp(cmd, "ls", cmd_length) == 0 && cmd_length == 2) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the ls command
+        cmd_ls(args);
+        print_prompt();
+        return;
+    }
+    
+    // Check for "cd" command
+    if (strncmp(cmd, "cd", cmd_length) == 0 && cmd_length == 2) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the cd command
+        cmd_cd(args);
+        print_prompt();
+        return;
+    }
+    
+    // Check for "mkdir" command
+    if (strncmp(cmd, "mkdir", cmd_length) == 0 && cmd_length == 5) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the mkdir command
+        cmd_mkdir(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "read", cmd_length) == 0 && cmd_length == 4) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the read command
+        cmd_read(args);
+        print_prompt();
+        return;
+    }
+    
     // Unknown command
     terminal_writestring("Unknown command: ");
     terminal_write(cmd, cmd_length);
     terminal_writestring("\n");
     print_prompt();
-}
-
-// Add this function to print the prompt
-void print_prompt(void) {
-    terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
-    terminal_writestring("admin@syncwideos");
-    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
-    terminal_writestring(":");
-    terminal_setcolor(VGA_COLOR_CYAN);
-    terminal_writestring("~");
-    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
-    terminal_writestring("$ ");
-    update_cursor(terminal_row, terminal_column);
 }
 
 void kernel_main(void) {
@@ -292,11 +341,14 @@ void kernel_main(void) {
     terminal_writestring("|      Welcome to SyncWide OS      |\n");
     terminal_writestring("|       https://os.syncwi.de       |\n");
     terminal_writestring("|                                  |\n");
-    terminal_writestring("|         Version: 0.5.2gb         |\n");
+    terminal_writestring("|         Version: 0.6.0gb         |\n");
     terminal_writestring("------------------------------------\n");
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("\n");
     
+    // Initialize filesystem
+    fs_init();
+
     // Print initial prompt
     print_prompt();
     
