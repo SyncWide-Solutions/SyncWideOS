@@ -8,6 +8,7 @@
 #define FS_MAX_PATH_LENGTH 256
 #define FS_MAX_FILES 64
 #define FS_MAX_CONTENT_SIZE 1024
+#define FS_MAX_CONTENT_LENGTH 4096
 
 typedef enum {
     FS_TYPE_FILE,

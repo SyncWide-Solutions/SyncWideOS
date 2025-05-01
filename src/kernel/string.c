@@ -47,3 +47,12 @@ int strncmp(const char* s1, const char* s2, size_t n) {
     }
     return (*(unsigned char*)s1 - *(unsigned char*)s2);
 }
+
+char* strcat(char* dest, const char* src) {
+    char* ptr = dest + strlen(dest);
+    while (*src != '\0') {
+        *ptr++ = *src++;
+    }
+    *ptr = '\0';
+    return dest;
+}

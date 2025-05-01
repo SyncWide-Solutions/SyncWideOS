@@ -15,5 +15,6 @@ void cmd_cat(const char* args);
 void cmd_pwd(void);
 void cmd_read(const char* args);
 void cmd_help(const char* args);
+void cmd_pia(const char* args);
 
 #endif /* COMMANDS_H */

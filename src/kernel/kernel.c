@@ -323,6 +323,18 @@ void process_command(const char* cmd) {
         print_prompt();
         return;
     }
+
+    // Check for "pia" command
+    if (strncmp(cmd, "pia", cmd_length) == 0 && cmd_length == 3) {
+        // Get the arguments (skip the command and any spaces after it)
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        
+        // Call the pia command
+        cmd_pia(args);
+        print_prompt();
+        return;
+    }
     
     // Unknown command
     terminal_writestring("Unknown command: ");

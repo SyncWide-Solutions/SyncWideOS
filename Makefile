@@ -10,11 +10,16 @@ all: grub
 boot:
 	i686-elf-as $(SRC_DIR)/bootloader/boot.s -o $(BUILD_DIR)/boot.o
 
-# Compile commands
-commands: $(wildcard $(SRC_DIR)/commands/*.c)
-	for file in $^ ; do \
-		i686-elf-gcc -c $$file -o $(BUILD_DIR)/commands/$$(basename $$file .c).o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include ; \
-	done
+# Define command sources and objects
+COMMAND_SOURCES := $(wildcard $(SRC_DIR)/commands/*.c)
+COMMAND_OBJECTS := $(patsubst $(SRC_DIR)/commands/%.c,$(BUILD_DIR)/commands/%.o,$(COMMAND_SOURCES))
+
+# Target to build all command objects
+commands: $(COMMAND_OBJECTS)
+
+# Pattern rule to compile each command file individually
+$(BUILD_DIR)/commands/%.o: $(SRC_DIR)/commands/%.c
+	i686-elf-gcc -c $< -o $@ -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
 
 filesystem: $(SRC_DIR)/kernel/filesystem.c
 	i686-elf-gcc -c $(SRC_DIR)/kernel/filesystem.c -o $(BUILD_DIR)/filesystem.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
