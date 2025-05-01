@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include "../include/string.h"
 #include "../include/keyboard.h"
+#include "../include/commands.h"
+#include "../include/vga.h"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -14,25 +16,10 @@
 #error "This tutorial needs to be compiled with a ix86-elf compiler"
 #endif
 
-/* Hardware text mode color constants. */
-enum vga_color {
-    VGA_COLOR_BLACK = 0,
-    VGA_COLOR_BLUE = 1,
-    VGA_COLOR_GREEN = 2,
-    VGA_COLOR_CYAN = 3,
-    VGA_COLOR_RED = 4,
-    VGA_COLOR_MAGENTA = 5,
-    VGA_COLOR_BROWN = 6,
-    VGA_COLOR_LIGHT_GREY = 7,
-    VGA_COLOR_DARK_GREY = 8,
-    VGA_COLOR_LIGHT_BLUE = 9,
-    VGA_COLOR_LIGHT_GREEN = 10,
-    VGA_COLOR_LIGHT_CYAN = 11,
-    VGA_COLOR_LIGHT_RED = 12,
-    VGA_COLOR_LIGHT_MAGENTA = 13,
-    VGA_COLOR_LIGHT_BROWN = 14,
-    VGA_COLOR_WHITE = 15,
-};
+size_t terminal_row;
+size_t terminal_column;
+uint8_t terminal_color;
+uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
 
 /* Port I/O functions */
 static inline void outb(uint16_t port, uint8_t value) {
@@ -53,24 +40,21 @@ size_t strlen(const char* str)
     return len;
 }
 
-static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg) 
-{
-    return fg | bg << 4;
+int strncmp(const char *s1, const char *s2, size_t n) {
+    while (n && *s1 && (*s1 == *s2)) {
+        ++s1;
+        ++s2;
+        --n;
+    }
+    if (n == 0) {
+        return 0;
+    }
+    return (*(unsigned char *)s1 - *(unsigned char *)s2);
 }
-
-static inline uint16_t vga_entry(unsigned char uc, uint8_t color) 
-{
-    return (uint16_t) uc | (uint16_t) color << 8;
-}
-
-#define VGA_WIDTH   80
-#define VGA_HEIGHT  25
-#define VGA_MEMORY  0xB8000 
-
-size_t terminal_row;
-size_t terminal_column;
-uint8_t terminal_color;
-uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
+ 
+#define MAX_COMMAND_LENGTH 256
+char current_command[MAX_COMMAND_LENGTH];
+size_t command_length = 0;
 
 void terminal_initialize(void) 
 {
@@ -243,6 +227,49 @@ void update_cursor(int row, int col) {
     outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
 }
 
+void process_command(const char* cmd) {
+    // Skip leading spaces
+    while (*cmd == ' ') cmd++;
+    
+    // Find the end of the command (first space or null terminator)
+    const char* cmd_end = cmd;
+    while (*cmd_end && *cmd_end != ' ') cmd_end++;
+    
+    size_t cmd_length = cmd_end - cmd;
+    
+    // Check for empty command
+    if (cmd_length == 0) {
+        print_prompt();
+        return;
+    }
+    
+    // Check for "clear" command
+    if (strncmp(cmd, "clear", cmd_length) == 0 && cmd_length == 5) {
+        terminal_clear();
+        print_prompt();
+        return;
+    }
+    
+    // Unknown command
+    terminal_writestring("Unknown command: ");
+    terminal_write(cmd, cmd_length);
+    terminal_writestring("\n");
+    print_prompt();
+}
+
+// Add this function to print the prompt
+void print_prompt(void) {
+    terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
+    terminal_writestring("admin@syncwideos");
+    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    terminal_writestring(":");
+    terminal_setcolor(VGA_COLOR_CYAN);
+    terminal_writestring("~");
+    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    terminal_writestring("$ ");
+    update_cursor(terminal_row, terminal_column);
+}
+
 void kernel_main(void) {
     /* Initialize terminal interface */
     terminal_initialize();
@@ -257,19 +284,16 @@ void kernel_main(void) {
     terminal_writestring("------------------------------------\n");
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("\n");
-    terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
-    terminal_writestring("admin@syncwideos");
-    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
-    terminal_writestring(":");
-    terminal_setcolor(VGA_COLOR_CYAN);
-    terminal_writestring("~");
-    terminal_setcolor(VGA_COLOR_LIGHT_GREY);
-    terminal_writestring("$ ");
     
-    update_cursor(terminal_row, terminal_column);
+    // Print initial prompt
+    print_prompt();
     
     // Initialize keyboard
     keyboard_init();
+    
+    // Initialize command buffer
+    command_length = 0;
+    current_command[0] = '\0';
 
     // Main input loop
     while (1) {
@@ -280,19 +304,36 @@ void kernel_main(void) {
         char key = keyboard_get_key();
         
         if (key != 0) {
-            // Handle special keys or control characters if needed
-            switch (key) {
-                case '\b':  // Backspace
-                    if (terminal_column > 0) {
-                        terminal_column--;
-                        terminal_putentryat(' ', terminal_color, terminal_column, terminal_row);
-                    }
-                    break;
-                default:
-                    terminal_putchar(key);
+            // Handle special keys or control characters
+            if (key == '\n') {
+                // Enter key pressed - execute command
+                terminal_writestring("\n");
+                current_command[command_length] = '\0';
+                process_command(current_command);
+                
+                // Reset command buffer
+                command_length = 0;
+                current_command[0] = '\0';
+            } 
+            else if (key == '\b') {
+                // Backspace key pressed
+                if (command_length > 0 && terminal_column > 0) {
+                    command_length--;
+                    current_command[command_length] = '\0';
+                    terminal_column--;
+                    terminal_putentryat(' ', terminal_color, terminal_column, terminal_row);
+                    update_cursor(terminal_row, terminal_column);
+                }
             }
-            
-            update_cursor(terminal_row, terminal_column);
+            else {
+                // Regular character input
+                if (command_length < MAX_COMMAND_LENGTH - 1) {
+                    current_command[command_length++] = key;
+                    current_command[command_length] = '\0';
+                    terminal_putchar(key);
+                    update_cursor(terminal_row, terminal_column);
+                }
+            }
         }
     }    
 }

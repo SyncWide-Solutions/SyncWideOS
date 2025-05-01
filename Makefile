@@ -3,17 +3,24 @@ SRC_DIR := src
 
 # Create build directory if it doesn't exist
 $(shell mkdir -p $(BUILD_DIR))
+$(shell mkdir -p $(BUILD_DIR)/commands)
 
 all: grub
 
 boot:
 	i686-elf-as $(SRC_DIR)/bootloader/boot.s -o $(BUILD_DIR)/boot.o
 
+# Compile commands
+commands: $(wildcard $(SRC_DIR)/commands/*.c)
+	for file in $^ ; do \
+		i686-elf-gcc -c $$file -o $(BUILD_DIR)/commands/$$(basename $$file .c).o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include ; \
+	done
+
 kernel: $(SRC_DIR)/kernel/kernel.c
 	i686-elf-gcc -c $(SRC_DIR)/kernel/kernel.c -o $(BUILD_DIR)/kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
 
-link: boot kernel
-	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o -lgcc
+link: boot kernel commands
+	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/commands/*.o -lgcc
 
 grub: link
 	grub-file --is-x86-multiboot $(BUILD_DIR)/myos.bin
