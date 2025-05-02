@@ -14,7 +14,6 @@
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
 #define KEY_CTRL_X 24  // ASCII for Ctrl+X (CAN)
-#define KEY_F1 0x90  // Custom code for F1
 
 // Editor state structure
 typedef struct {
@@ -175,6 +174,8 @@ void editor_save_file(editor_state_t* state) {
 
 // Get a key from the keyboard with special key handling
 char editor_get_key(editor_state_t* state) {
+    (void)state;
+
     // Check if a key is available
     if ((inb(KEYBOARD_STATUS_PORT) & 1) == 0) {
         return 0; // No key available
@@ -317,7 +318,7 @@ void editor_handle_key(editor_state_t* state, char key) {
             
             state->modified = true;
         }
-    } else if (key == KEY_F1) {
+    } else if ((unsigned char)key == KEY_F1) {
         // Show help menu
         editor_display_help_menu(state);
     } else if (key == KEY_CTRL_X) {
@@ -376,7 +377,7 @@ void editor_handle_key(editor_state_t* state, char key) {
         int line_len = strlen(state->lines[state->cursor_y]);
         if (state->cursor_x < line_len) {
             state->cursor_x++;
-        } else if (state->cursor_y < state->num_lines - 1) {
+        } else if (state->cursor_y < state->num_lines - 1) {  // FIX: Changed state.num_lines to state->num_lines
             // Move to beginning of next line
             state->cursor_y++;
             state->cursor_x = 0;
@@ -386,7 +387,7 @@ void editor_handle_key(editor_state_t* state, char key) {
                 state->screen_offset = state->cursor_y - (VGA_HEIGHT - 3);
             }
         }
-    } 
+    }
     // Handle printable ASCII characters
     else if (key >= 32 && key <= 126) {
         // Check if there's room in the line
@@ -462,7 +463,10 @@ void editor_display(editor_state_t* state) {
     }
 
     // Position cursor
-    update_cursor(state->cursor_y - state->screen_offset + 1, state->cursor_x);
+    int y = state->cursor_y - state->screen_offset + 1;
+    if (y < 1) y = 1;
+    if (y >= VGA_HEIGHT - 1) y = VGA_HEIGHT - 2;
+    update_cursor(y, state->cursor_x);
     
     // Restore original color
     terminal_setcolor(old_color);
@@ -470,6 +474,8 @@ void editor_display(editor_state_t* state) {
 
 // Display help menu
 void editor_display_help_menu(editor_state_t* state) {
+    (void)state;
+
     // Save current terminal color
     uint8_t old_color = terminal_color;
     
@@ -632,6 +638,12 @@ void cmd_pia(const char* args) {
                             if (state.cursor_y < state.screen_offset) {
                                 state.screen_offset = state.cursor_y;
                             }
+                            
+                            // Ensure cursor stays within valid display area
+                            if (state.cursor_y - state.screen_offset + 1 < 1) {
+                                state.screen_offset = state.cursor_y;
+                            }
+                            
                             editor_display(&state);
                         }
                         continue;
@@ -645,10 +657,11 @@ void cmd_pia(const char* args) {
                                 state.cursor_x = line_len;
                             }
                             
-                            // Adjust screen offset if needed
-                            if (state.cursor_y >= state.screen_offset + VGA_HEIGHT - 2) {
+                            // Adjust screen offset if needed to ensure cursor stays within valid display area
+                            if (state.cursor_y - state.screen_offset + 1 > VGA_HEIGHT - 2) {
                                 state.screen_offset = state.cursor_y - (VGA_HEIGHT - 3);
                             }
+                            
                             editor_display(&state);
                         }
                         continue;

@@ -31,14 +31,14 @@ kernel: $(SRC_DIR)/kernel/kernel.c
 	i686-elf-gcc -c $(SRC_DIR)/kernel/kernel.c -o $(BUILD_DIR)/kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
 
 link: boot kernel commands filesystem string
-	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/myos.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/filesystem.o $(BUILD_DIR)/string.o $(BUILD_DIR)/commands/*.o -lgcc
+	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/SyncWideOS.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/filesystem.o $(BUILD_DIR)/string.o $(BUILD_DIR)/commands/*.o -lgcc
 
 grub: link
-	grub-file --is-x86-multiboot $(BUILD_DIR)/myos.bin
+	grub-file --is-x86-multiboot $(BUILD_DIR)/SyncWideOS.bin
 	mkdir -p $(BUILD_DIR)/isodir/boot/grub
-	cp $(BUILD_DIR)/myos.bin $(BUILD_DIR)/isodir/boot/myos.bin
+	cp $(BUILD_DIR)/SyncWideOS.bin $(BUILD_DIR)/isodir/boot/SyncWideOS.bin
 	cp $(SRC_DIR)/grub.cfg $(BUILD_DIR)/isodir/boot/grub/grub.cfg
-	grub-mkrescue -o $(BUILD_DIR)/myos.iso $(BUILD_DIR)/isodir
+	grub-mkrescue -o $(BUILD_DIR)/SyncWideOS.iso $(BUILD_DIR)/isodir
 
 build_floppy: link
 	dd if=/dev/zero of=$(BUILD_DIR)/floppy.img bs=512 count=2880
@@ -46,10 +46,10 @@ build_floppy: link
 	mkdir -p $(BUILD_DIR)/mnt
 	sudo mount -o loop $(BUILD_DIR)/floppy.img $(BUILD_DIR)/mnt
 	sudo mkdir -p $(BUILD_DIR)/mnt/boot
-	sudo cp $(BUILD_DIR)/myos.bin $(BUILD_DIR)/mnt/boot/
-	echo 'DEFAULT myos' | sudo tee $(BUILD_DIR)/mnt/syslinux.cfg
-	echo 'LABEL myos' | sudo tee -a $(BUILD_DIR)/mnt/syslinux.cfg
-	echo '  KERNEL /boot/myos.bin' | sudo tee -a $(BUILD_DIR)/mnt/syslinux.cfg
+	sudo cp $(BUILD_DIR)/SyncWideOS.bin $(BUILD_DIR)/mnt/boot/
+	echo 'DEFAULT SyncWideOS' | sudo tee $(BUILD_DIR)/mnt/syslinux.cfg
+	echo 'LABEL SyncWideOS' | sudo tee -a $(BUILD_DIR)/mnt/syslinux.cfg
+	echo '  KERNEL /boot/SyncWideOS.bin' | sudo tee -a $(BUILD_DIR)/mnt/syslinux.cfg
 	sudo umount $(BUILD_DIR)/mnt
 	syslinux -i $(BUILD_DIR)/floppy.img
 	rmdir $(BUILD_DIR)/mnt
@@ -59,7 +59,7 @@ clean:
 
 run:
 	qemu-system-x86_64 \
-	-fda $(BUILD_DIR)/myos.iso \
+	-fda $(BUILD_DIR)/SyncWideOS.iso \
 	-net nic \
 	-net user
 
@@ -71,7 +71,7 @@ run_floppy:
 
 test:
 	timeout 20s qemu-system-x86_64 \
-		-drive file=$(BUILD_DIR)/myos.iso,format=raw,if=floppy \
+		-drive file=$(BUILD_DIR)/SyncWideOS.iso,format=raw,if=floppy \
 		-net nic \
 		-net user \
 		-nographic \
