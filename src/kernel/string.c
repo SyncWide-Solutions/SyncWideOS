@@ -56,3 +56,16 @@ char* strcat(char* dest, const char* src) {
     *ptr = '\0';
     return dest;
 }
+
+char* strrchr(const char* str, int ch) {
+    char* last_occurrence = NULL;
+    
+    while (*str) {
+        if (*str == (char)ch) {
+            last_occurrence = (char*)str;
+        }
+        str++;
+    }
+    
+    return last_occurrence;
+}
