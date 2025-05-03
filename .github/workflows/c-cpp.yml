@@ -28,7 +28,10 @@ jobs:
           run: tar -xvzf binutils-2.42.tar.gz
         
         - name: Create a directory for Binutils
-          run: mkdir build-binutils | cd build-binutils
+          run: mkdir build-binutils
+        
+        - name: Enter then directory for Binutils
+          run: cd build-binutils
 
         - name: Build Binutils
           run: ../binutils-2.42/configure --target=i686-elf --prefix="$HOME/opt/cross" --with-sysroot --disable-nls --disable-werror | make | make install | cd ..
