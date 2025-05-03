@@ -20,9 +20,6 @@ jobs:
         
         - name: Install pre-dependencies
           run: sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo
-        
-        - name: Create a directory to work in
-          run: mkdir opt | cd opt
 
         - name: Get Binutils
           run: wget https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.gz | tar -xvzf binutils-2.42.tar.gz
