@@ -54,20 +54,14 @@ jobs:
         - name: Enter the directory for GCC
           run: cd build-gcc
         
-        - name: Build GCC
-          run: ../gcc-13.2.0/configure --target=i686-elf --prefix="$HOME/opt/cross" --disable-nls --enable-languages=c,c++ --without-headers
-    
-        - name: make all-gcc
-          run: make all-gcc
-
-        - name: make all-target-libgcc
-          run: make all-target-libgcc
-
-        - name: make install-gcc
-          run: make install-gcc
-        
-        - name: make install-target-libgcc
-          run: make install-target-libgcc
+        - name: Build GCC and install
+          run: |
+            cd build-gcc
+            ../gcc-13.2.0/configure --target=i686-elf --prefix="$HOME/opt/cross" --disable-nls --enable-languages=c,c++ --without-headers
+            make all-gcc
+            make all-target-libgcc
+            make install-gcc
+            make install-target-libgcc
 
         - name: make clean
           run: make clean
