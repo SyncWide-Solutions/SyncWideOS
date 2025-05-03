@@ -37,17 +37,41 @@ jobs:
           run: ../binutils-2.42/configure --target=i686-elf --prefix="$HOME/opt/cross" --with-sysroot --disable-nls --disable-werror | make | make install | cd ..
 
         - name: Get GCC
-          run: wget https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz | tar -xvzf gcc-13.2.0.tar.gz
+          run: wget https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz
+
+        - name: Unpack GCC
+          run: tar -xvzf gcc-13.2.0.tar.gz
         
+        - name: Create a directory for GCC
+          run: cd gcc-13.2.0
+
         - name: Download prerequisites for GCC
-          run: cd gcc-13.2.0 | ./contrib/download_prerequisites | cd ..
+          run: ./contrib/download_prerequisites
+        
+        - name: Exit GCC directory
+          run: cd ..
         
         - name: Create a dirctory to Build GCC
-          run: mkdir build-gcc | cd build-gcc
+          run: mkdir build-gcc
+
+        - name: Enter the directory for GCC
+          run: cd build-gcc
         
         - name: Build GCC
-          run: ../gcc-13.2.0/configure --target=i686-elf --prefix="$HOME/opt/cross" --disable-nls --enable-languages=c,c++ --without-headers | make all-gcc | make all-target-libgcc | make install-gcc | make install-target-libgcc
+          run: ../gcc-13.2.0/configure --target=i686-elf --prefix="$HOME/opt/cross" --disable-nls --enable-languages=c,c++ --without-headers
     
+        - name: make all-gcc
+          run: make all-gcc
+
+        - name: make all-target-libgcc
+          run: make all-target-libgcc
+
+        - name: make install-gcc
+          run: make install-gcc
+        
+        - name: make install-target-libgcc
+          run: make install-target-libgcc
+
         - name: make clean
           run: make clean
     
