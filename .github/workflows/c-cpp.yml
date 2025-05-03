@@ -63,7 +63,7 @@ jobs:
             make install-gcc
             make install-target-libgcc
           
-        - name: Add GCC to Path+
+        - name: Add GCC to Path
           run: export PATH="$HOME/opt/cross/bin:$PATH" && source ~/.bashrc
         
         - name: Test GCC
