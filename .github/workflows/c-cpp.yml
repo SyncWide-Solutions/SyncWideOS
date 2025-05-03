@@ -42,11 +42,8 @@ jobs:
         - name: Unpack GCC
           run: tar -xvzf gcc-13.2.0.tar.gz
         
-        - name: Create a directory for GCC
-          run: cd gcc-13.2.0
-
         - name: Download prerequisites for GCC
-          run: ./contrib/download_prerequisites
+          run: ./gcc-13.2.0/contrib/download_prerequisites
         
         - name: Exit GCC directory
           run: cd ..
