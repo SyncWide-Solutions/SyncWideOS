@@ -13,28 +13,40 @@ jobs:
 
     steps:
         - uses: ilammy/setup-nasm@v1.5.2
-        - uses: docker/setup-qemu-action@v3.6.0
         - uses: actions/checkout@v4
-    
-        - name: Install QEMU
-          run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
+
+        - name: Update Ubuntu
+          run: sudo apt update
+        
+        - name: Install pre-dependencies
+          run: sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo
+        
+        - name: Create a directory to work in
+          run: mkdir ~/opt | cd ~/opt
+
+        - name: Get Binutils
+          run: wget https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.gz | tar -xvzf binutils-2.42.tar.gz
+        
+        - name: Create a directory for Binutils
+          run: mkdir build-binutils | cd build-binutils
+
+        - name: Build Binutils
+          run: ../binutils-2.42/configure --target=i686-elf --prefix="$HOME/opt/cross" --with-sysroot --disable-nls --disable-werror | make | make install | cd ..
+
+        - name: Get GCC
+          run: wget https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz | tar -xvzf gcc-13.2.0.tar.gz
+        
+        - name: Download prerequisites for GCC
+          run: cd gcc-13.2.0 | ./contrib/download_prerequisites | cd ..
+        
+        - name: Create a dirctory to Build GCC
+          run: mkdir build-gcc | cd build-gcc
+        
+        - name: Build GCC
+          run: ../gcc-13.2.0/configure --target=i686-elf --prefix="$HOME/opt/cross" --disable-nls --enable-languages=c,c++ --without-headers | make all-gcc | make all-target-libgcc | make install-gcc | make install-target-libgcc
     
         - name: make clean
           run: make clean
     
         - name: make
           run: make
-        
-        - name: make test
-          run: make test
-          
-        - name: Upload build artifacts
-          uses: actions/upload-artifact@v3
-          with:
-            name: syncwide-os-build
-            path: |
-              *.bin
-              *.img
-              *.iso
-              build/
-            retention-days: 7

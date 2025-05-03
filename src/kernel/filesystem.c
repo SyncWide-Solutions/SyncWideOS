@@ -37,6 +37,9 @@ void fs_init(void) {
     // Create a welcome file
     fs_node_t* welcome = fs_create_file(fs_root, "welcome.txt");
     fs_write_file(welcome, "Welcome to SyncWideOS Filesystem!\nType 'help' for available commands.");
+
+    // Create a sample image file
+    fs_create_sample_images();
 }
 
 fs_node_t* fs_get_root(void) {
@@ -75,6 +78,96 @@ fs_node_t* fs_create_file(fs_node_t* dir, const char* name) {
     dir->children[dir->child_count++] = file;
     
     return file;
+}
+
+void fs_create_sample_images(void) {
+    // Create a simple gradient image
+    fs_node_t* gradient = fs_create_file(fs_root, "gradient.img");
+    if (gradient) {
+        // Create a simple 10x10 grayscale gradient pattern
+        char gradient_data[FS_MAX_CONTENT_SIZE] = 
+            "0123456789\n"
+            "1234567890\n"
+            "2345678901\n"
+            "3456789012\n"
+            "4567890123\n"
+            "5678901234\n"
+            "6789012345\n"
+            "7890123456\n"
+            "8901234567\n"
+            "9012345678\n";
+        
+        fs_write_file(gradient, gradient_data);
+    }
+    
+    // Create a colorful rainbow pattern
+    fs_node_t* rainbow = fs_create_file(fs_root, "rainbow.img");
+    if (rainbow) {
+        // Each row uses a different color from the VGA palette
+        // We'll use the same intensity (9) but different colors
+        char rainbow_data[FS_MAX_CONTENT_SIZE] = 
+            "4444444444\n"  // Red (VGA_COLOR_RED = 4)
+            "6666666666\n"  // Brown (VGA_COLOR_BROWN = 6)
+            "2222222222\n"  // Green (VGA_COLOR_GREEN = 2)
+            "3333333333\n"  // Cyan (VGA_COLOR_CYAN = 3)
+            "1111111111\n"  // Blue (VGA_COLOR_BLUE = 1)
+            "5555555555\n"  // Magenta (VGA_COLOR_MAGENTA = 5)
+            "8888888888\n"  // Dark Grey (VGA_COLOR_DARK_GREY = 8)
+            "7777777777\n"  // Light Grey (VGA_COLOR_LIGHT_GREY = 7)
+            "9999999999\n"  // Light Blue (VGA_COLOR_LIGHT_BLUE = 9)
+            "AAAAAAAAAA\n"; // Light Green (VGA_COLOR_LIGHT_GREEN = 10, 'A' in hex)
+        
+        fs_write_file(rainbow, rainbow_data);
+    }
+    
+    // Create a colorful SyncWide logo
+    fs_node_t* logo = fs_create_file(fs_root, "logo.bmp");
+    if (logo) {
+        // Create a simple logo with different colors
+        // Using hex values that correspond to VGA colors
+        char logo_data[FS_MAX_CONTENT_SIZE] = 
+            "000000000000000000000\n"
+            "000111111111111110000\n"
+            "001444444444444441000\n"
+            "014444444444444444100\n"
+            "014422222222222441000\n"
+            "014422222222224410000\n"
+            "014422222222244100000\n"
+            "014422222222441000000\n"
+            "014422222224410000000\n"
+            "014422222244100000000\n"
+            "014422222441000000000\n"
+            "014422224410000000000\n"
+            "014422244100000000000\n"
+            "014422441000000000000\n"
+            "014424410000000000000\n"
+            "014444100000000000000\n"
+            "014441000000000000000\n"
+            "001410000000000000000\n"
+            "000100000000000000000\n"
+            "000000000000000000000\n";
+        
+        fs_write_file(logo, logo_data);
+    }
+    
+    // Create a checkerboard pattern
+    fs_node_t* checkerboard = fs_create_file(fs_root, "checker.pic");
+    if (checkerboard) {
+        // Alternating black and white squares
+        char checker_data[FS_MAX_CONTENT_SIZE] = 
+            "0F0F0F0F0F\n"
+            "F0F0F0F0F0\n"
+            "0F0F0F0F0F\n"
+            "F0F0F0F0F0\n"
+            "0F0F0F0F0F\n"
+            "F0F0F0F0F0\n"
+            "0F0F0F0F0F\n"
+            "F0F0F0F0F0\n"
+            "0F0F0F0F0F\n"
+            "F0F0F0F0F0\n";
+        
+        fs_write_file(checkerboard, checker_data);
+    }
 }
 
 fs_node_t* fs_create_directory(fs_node_t* dir, const char* name) {

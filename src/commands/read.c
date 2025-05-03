@@ -1,7 +1,65 @@
 #include "../include/filesystem.h"
 #include "../include/string.h"
+#include "../include/vga.h"
+#include <stdint.h>
 
 extern void terminal_writestring(const char* data);
+extern void terminal_setcolor(uint8_t color);
+extern uint8_t terminal_getcolor(void);
+
+// Define image file extensions
+const char* IMAGE_EXTENSIONS[] = {".img", ".bmp", ".pic", NULL};
+
+// Check if a filename has an image extension
+int is_image_file(const char* filename) {
+    int i = 0;
+    int len = strlen(filename);
+    
+    while (IMAGE_EXTENSIONS[i] != NULL) {
+        int ext_len = strlen(IMAGE_EXTENSIONS[i]);
+        if (len > ext_len && strcmp(filename + len - ext_len, IMAGE_EXTENSIONS[i]) == 0) {
+            return 1;
+        }
+        i++;
+    }
+    return 0;
+}
+
+// Simple ASCII art renderer for image files
+void render_image_ascii(const char* content) {
+    // This is a simplified renderer that assumes the image content
+    // contains special formatting with pixel data
+    
+    terminal_writestring("ASCII Image Rendering:\n\n");
+    
+    uint8_t original_color = terminal_getcolor();
+    
+    // Process the image data
+    const char* ptr = content;
+    while (*ptr) {
+        if ((*ptr >= '0' && *ptr <= '9') || (*ptr >= 'A' && *ptr <= 'F')) {
+            // Convert hex character to a value (0-15)
+            int value;
+            if (*ptr >= '0' && *ptr <= '9') {
+                value = *ptr - '0';
+            } else {
+                value = (*ptr - 'A') + 10;
+            }
+            
+            // Use the value directly as a VGA color
+            uint8_t color = vga_entry_color(VGA_COLOR_WHITE, value);
+            terminal_setcolor(color);
+            terminal_writestring("█"); // Full block character
+        } 
+        else if (*ptr == '\n') {
+            terminal_writestring("\n");
+        }
+        ptr++;
+    }
+    
+    // Restore original color
+    terminal_setcolor(original_color);
+}
 
 void cmd_read(const char* args) {
     // Skip leading spaces
@@ -35,6 +93,15 @@ void cmd_read(const char* args) {
     terminal_writestring("--- File: ");
     terminal_writestring(args);
     terminal_writestring(" ---\n");
-    terminal_writestring(file->content);
+    
+    // Check if it's an image file
+    if (is_image_file(args)) {
+        terminal_writestring("Detected image file. Rendering...\n");
+        render_image_ascii(file->content);
+    } else {
+        // Regular text file
+        terminal_writestring(file->content);
+    }
+    
     terminal_writestring("\n--- End of file ---\n");
 }
