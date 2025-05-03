@@ -62,6 +62,12 @@ jobs:
             make all-target-libgcc
             make install-gcc
             make install-target-libgcc
+          
+        - name: Add GCC to Path+
+          run: export PATH="$HOME/opt/cross/bin:$PATH" && source ~/.bashrc
+        
+        - name: Test GCC
+          run: i686-elf-as --version
 
         - name: make clean
           run: make clean
