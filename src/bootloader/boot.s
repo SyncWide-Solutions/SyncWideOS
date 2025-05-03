@@ -76,15 +76,19 @@ _start:
 	runtime support to work as well.
 	*/
 
-	/*
-	Enter the high-level kernel. The ABI requires the stack is 16-byte
-	aligned at the time of the call instruction (which afterwards pushes
-	the return pointer of size 4 bytes). The stack was originally 16-byte
-	aligned above and we've pushed a multiple of 16 bytes to the
-	stack since (pushed 0 bytes so far), so the alignment has thus been
-	preserved and the call is well defined.
-	*/
-	call kernel_main
+    /*
+    Enter the high-level kernel. The ABI requires the stack is 16-byte
+    aligned at the time of the call instruction (which afterwards pushes
+    the return pointer of size 4 bytes). The stack was originally 16-byte
+    aligned above and we've pushed a multiple of 16 bytes to the
+    stack since (pushed 0 bytes so far), so the alignment has thus been
+    preserved and the call is well defined.
+    */
+    
+    /* Pass multiboot info pointer (EBX) and magic number (EAX) to kernel_main */
+    pushl %ebx    /* multiboot info structure pointer */
+    pushl %eax    /* multiboot magic number */
+    call kernel_main
 
 	/*
 	If the system has nothing more to do, put the computer into an
