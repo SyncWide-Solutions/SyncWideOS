@@ -71,7 +71,33 @@ void cmd_read(const char* args) {
         return;
     }
     
-    // Find the file
+    // Check if FAT32 is mounted
+    if (fs_is_mounted()) {
+        // Try to read from FAT32 filesystem
+        fs_file_handle_t* handle = fs_open(args, "r");  // Added mode parameter
+        if (!handle) {
+            terminal_writestring("Error: File not found in FAT32 filesystem: ");
+            terminal_writestring(args);
+            terminal_writestring("\n");
+            return;
+        }
+        
+        // Read file content
+        char buffer[1024];
+        size_t bytes_read = fs_read(handle, buffer, sizeof(buffer) - 1);
+        buffer[bytes_read] = '\0';
+        
+        terminal_writestring("--- File: ");
+        terminal_writestring(args);
+        terminal_writestring(" (FAT32) ---\n");
+        terminal_writestring(buffer);
+        terminal_writestring("\n--- End of file ---\n");
+        
+        fs_close(handle);
+        return;
+    }
+    
+    // Use legacy filesystem
     fs_node_t* file = fs_find_node_by_path(args);
     
     if (!file) {
@@ -92,7 +118,7 @@ void cmd_read(const char* args) {
     // Display the file contents
     terminal_writestring("--- File: ");
     terminal_writestring(args);
-    terminal_writestring(" ---\n");
+    terminal_writestring(" (Legacy) ---\n");
     
     // Check if it's an image file
     if (is_image_file(args)) {

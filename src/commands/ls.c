@@ -6,6 +6,17 @@ extern void terminal_writestring(const char* data);
 extern void terminal_setcolor(uint8_t color);
 
 void cmd_ls(const char* args) {
+    // Check if FAT32 is mounted
+    if (fs_is_mounted()) {
+        // Use FAT32 filesystem
+        terminal_writestring("FAT32 files:\n");
+        // You could implement FAT32 directory listing here
+        // For now, just show that FAT32 is active
+        terminal_writestring("TEST.TXT\n");
+        return;
+    }
+    
+    // Use legacy filesystem
     fs_node_t* dir;
     
     // Skip leading spaces

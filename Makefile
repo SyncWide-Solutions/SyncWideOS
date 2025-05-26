@@ -1,81 +1,97 @@
-BUILD_DIR := build
-SRC_DIR := src
+# Compiler and tools
+CC = i686-elf-gcc
+AS = i686-elf-as
+LD = i686-elf-gcc
 
-# Create build directory if it doesn't exist
-$(shell mkdir -p $(BUILD_DIR))
-$(shell mkdir -p $(BUILD_DIR)/commands)
+# Compiler flags
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Isrc/include
+LDFLAGS = -T src/linker.ld -ffreestanding -O2 -nostdlib -lgcc
 
-all: grub
+# Directories
+SRCDIR = src
+BUILDDIR = build
+BOOTDIR = $(BUILDDIR)/bootloader
+KERNELDIR = $(BUILDDIR)/kernel
+DRIVERSDIR = $(BUILDDIR)/drivers
+COMMANDSDIR = $(BUILDDIR)/commands
 
-boot:
-	i686-elf-as $(SRC_DIR)/bootloader/boot.s -o $(BUILD_DIR)/boot.o
+# Source files
+BOOT_SOURCES = $(wildcard $(SRCDIR)/bootloader/*.s)
+KERNEL_SOURCES = $(wildcard $(SRCDIR)/kernel/*.c)
+DRIVER_SOURCES = $(wildcard $(SRCDIR)/drivers/*.c)
+COMMAND_SOURCES = $(wildcard $(SRCDIR)/commands/*.c)
 
-# Define command sources and objects
-COMMAND_SOURCES := $(wildcard $(SRC_DIR)/commands/*.c)
-COMMAND_OBJECTS := $(patsubst $(SRC_DIR)/commands/%.c,$(BUILD_DIR)/commands/%.o,$(COMMAND_SOURCES))
+# Object files
+BOOT_OBJECTS = $(BOOT_SOURCES:$(SRCDIR)/bootloader/%.s=$(BOOTDIR)/%.o)
+KERNEL_OBJECTS = $(KERNEL_SOURCES:$(SRCDIR)/kernel/%.c=$(KERNELDIR)/%.o)
+DRIVER_OBJECTS = $(DRIVER_SOURCES:$(SRCDIR)/drivers/%.c=$(DRIVERSDIR)/%.o)
+COMMAND_OBJECTS = $(COMMAND_SOURCES:$(SRCDIR)/commands/%.c=$(COMMANDSDIR)/%.o)
 
-# Target to build all command objects
-commands: $(COMMAND_OBJECTS)
+# All object files
+OBJECTS = $(COMMAND_OBJECTS) $(DRIVER_OBJECTS) $(KERNEL_OBJECTS) $(BOOT_OBJECTS)
 
-# Pattern rule to compile each command file individually
-$(BUILD_DIR)/commands/%.o: $(SRC_DIR)/commands/%.c
-	i686-elf-gcc -c $< -o $@ -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
+# Target
+TARGET = $(BUILDDIR)/SyncWideOS.bin
+ISO_TARGET = $(BUILDDIR)/SyncWideOS.iso
 
-filesystem: $(SRC_DIR)/kernel/filesystem.c
-	i686-elf-gcc -c $(SRC_DIR)/kernel/filesystem.c -o $(BUILD_DIR)/filesystem.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
+# Default target - build both binary and ISO
+all: $(ISO_TARGET)
 
-string: $(SRC_DIR)/kernel/string.c
-	i686-elf-gcc -c $(SRC_DIR)/kernel/string.c -o $(BUILD_DIR)/string.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
+# Create directories
+$(BOOTDIR) $(KERNELDIR) $(DRIVERSDIR) $(COMMANDSDIR):
+	mkdir -p $@
 
-kernel: $(SRC_DIR)/kernel/kernel.c
-	i686-elf-gcc -c $(SRC_DIR)/kernel/kernel.c -o $(BUILD_DIR)/kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/include
+# Compile bootloader assembly files
+$(BOOTDIR)/%.o: $(SRCDIR)/bootloader/%.s | $(BOOTDIR)
+	$(AS) $< -o $@
 
-link: boot kernel commands filesystem string
-	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/SyncWideOS.bin -ffreestanding -O2 -nostdlib $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel.o $(BUILD_DIR)/filesystem.o $(BUILD_DIR)/string.o $(BUILD_DIR)/commands/*.o -lgcc
+# Compile kernel C files
+$(KERNELDIR)/%.o: $(SRCDIR)/kernel/%.c | $(KERNELDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
 
-grub: link
-	grub-file --is-x86-multiboot $(BUILD_DIR)/SyncWideOS.bin
-	mkdir -p $(BUILD_DIR)/isodir/boot/grub
-	cp $(BUILD_DIR)/SyncWideOS.bin $(BUILD_DIR)/isodir/boot/SyncWideOS.bin
-	cp $(SRC_DIR)/grub.cfg $(BUILD_DIR)/isodir/boot/grub/grub.cfg
-	grub-mkrescue -o $(BUILD_DIR)/SyncWideOS.iso $(BUILD_DIR)/isodir
+# Compile driver C files
+$(DRIVERSDIR)/%.o: $(SRCDIR)/drivers/%.c | $(DRIVERSDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
 
-build_floppy: link
-	dd if=/dev/zero of=$(BUILD_DIR)/floppy.img bs=512 count=2880
-	mkfs.vfat -F 12 $(BUILD_DIR)/floppy.img
-	mkdir -p $(BUILD_DIR)/mnt
-	sudo mount -o loop $(BUILD_DIR)/floppy.img $(BUILD_DIR)/mnt
-	sudo mkdir -p $(BUILD_DIR)/mnt/boot
-	sudo cp $(BUILD_DIR)/SyncWideOS.bin $(BUILD_DIR)/mnt/boot/
-	echo 'DEFAULT SyncWideOS' | sudo tee $(BUILD_DIR)/mnt/syslinux.cfg
-	echo 'LABEL SyncWideOS' | sudo tee -a $(BUILD_DIR)/mnt/syslinux.cfg
-	echo '  KERNEL /boot/SyncWideOS.bin' | sudo tee -a $(BUILD_DIR)/mnt/syslinux.cfg
-	sudo umount $(BUILD_DIR)/mnt
-	syslinux -i $(BUILD_DIR)/floppy.img
-	rmdir $(BUILD_DIR)/mnt
+# Compile command C files
+$(COMMANDSDIR)/%.o: $(SRCDIR)/commands/%.c | $(COMMANDSDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
 
+# Generate file data from iso_files
+src/generated/iso_files_data.c: scripts/generate_files.sh
+	@echo "Generating file data from iso_files..."
+	@mkdir -p src/generated
+	@./scripts/generate_files.sh
+
+# Add the generated file to objects
+GENERATED_OBJECTS = build/generated/iso_files_data.o
+
+build/generated/iso_files_data.o: src/generated/iso_files_data.c
+	@mkdir -p build/generated
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Update your main target to include generated objects
+$(TARGET): $(OBJECTS) $(GENERATED_OBJECTS)
+	$(LD) $(LDFLAGS) -o $@ $^
+
+# Create ISO
+$(ISO_TARGET): $(TARGET) src/generated/iso_files_data.c
+	rm -rf isodir
+	mkdir -p isodir/boot/grub
+	cp $(TARGET) isodir/boot/SyncWideOS.bin
+	cp src/grub.cfg isodir/boot/grub/grub.cfg
+	@if [ -d iso_files ]; then \
+	    echo "Copying files from iso_files to ISO..."; \
+	    cp -r iso_files/* isodir/; \
+	    echo "Files included in ISO:"; \
+	    find isodir -name "*.txt" -o -name "*.ini" -o -name "*.cfg" | grep -v boot; \
+	fi
+	grub-mkrescue -o $(ISO_TARGET) isodir
+
+# Clean build files
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf build/
+	rm -rf isodir/boot/
+	rm -f isodir/*.bin
 
-run:
-	qemu-system-x86_64 \
-	-fda $(BUILD_DIR)/SyncWideOS.iso \
-	-net nic \
-	-net user
-
-run_floppy:
-	qemu-system-x86_64 \
-	-fda $(BUILD_DIR)/floppy.img \
-	-net nic \
-	-net user
-
-test:
-	timeout 20s qemu-system-x86_64 \
-		-drive file=$(BUILD_DIR)/SyncWideOS.iso,format=raw,if=floppy \
-		-net nic \
-		-net user \
-		-nographic \
-		-serial mon:stdio \
-		-display none \
-		-no-reboot | tee qemu.log ; \
-		if grep -q "SyncWide OS version" qemu.log ; then echo "Boot success"; else echo "Boot failed"; exit 1; fi
+.PHONY: all clean

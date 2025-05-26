@@ -1,734 +1,484 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include "../include/string.h"
+#include "../include/commands.h"
 #include "../include/vga.h"
+#include "../include/keyboard.h"
 #include "../include/io.h"
 #include "../include/filesystem.h"
-#include "../include/keyboard.h"
-#include "../include/vga.h"
 
-// Editor constants
-#define EDITOR_MAX_LINES 100
-#define EDITOR_MAX_LINE_LENGTH 80
-#define KEYBOARD_DATA_PORT 0x60
-#define KEYBOARD_STATUS_PORT 0x64
-#define KEY_CTRL_X 24  // ASCII for Ctrl+X (CAN)
+// External functions from kernel
+extern void terminal_writestring(const char* data);
+extern void terminal_putchar(char c);
+extern void terminal_setcolor(uint8_t color);
+extern uint8_t terminal_getcolor(void);
+extern void terminal_putentryat(char c, uint8_t color, size_t x, size_t y);
+extern void update_cursor(int row, int col);
+extern size_t terminal_row;
+extern size_t terminal_column;
 
-// Editor state structure
+// Key definitions for special keys
+#define KEY_ESCAPE 27
+#define KEY_F1 0x3B
+#define KEY_ARROW_UP 0x48
+#define KEY_ARROW_DOWN 0x50
+#define KEY_ARROW_LEFT 0x4B
+#define KEY_ARROW_RIGHT 0x4D
+#define KEY_CTRL_S 19
+#define KEY_CTRL_O 15
+#define KEY_CTRL_Q 17
+
+// Editor constants (moved from filesystem.h since they're editor-specific)
+#define EDITOR_MAX_LINES 1000
+#define EDITOR_MAX_COLS 256
+
+// Editor state
 typedef struct {
-    char lines[EDITOR_MAX_LINES][EDITOR_MAX_LINE_LENGTH];
-    int num_lines;
+    char buffer[EDITOR_MAX_LINES][EDITOR_MAX_COLS];
     int cursor_x;
     int cursor_y;
-    int screen_offset;
-    char filename[FS_MAX_NAME_LENGTH];
+    int scroll_x;
+    int scroll_y;
+    int lines;
     bool modified;
-    bool exit_requested;
-    fs_node_t* file_node;
+    char filename[256]; // Use a reasonable size instead of FS_MAX_NAME_LENGTH
+    bool has_filename;
+    bool help_menu_open;
 } editor_state_t;
 
+static editor_state_t editor_state;
+
 // Function declarations
-void editor_init(editor_state_t* state, const char* filename);
-void editor_load_file(editor_state_t* state);
-void editor_save_file(editor_state_t* state);
-void editor_display(editor_state_t* state);
-void editor_handle_key(editor_state_t* state, char key);
-char editor_get_key(editor_state_t* state);
-void editor_display_help_menu(editor_state_t* state);
-bool editor_handle_help_menu(editor_state_t* state);
-void terminal_clear(void);
+void editor_init(void);
+void editor_display(void);
+void editor_handle_key(char key);
+char editor_get_key(void);
+void editor_insert_char(char c);
+void editor_delete_char(void);
+void editor_move_cursor(int dx, int dy);
+void editor_scroll_if_needed(void);
+void editor_load_file(const char* filename);
+void editor_save_file(void);
+void editor_display_help_menu(void);
+void editor_handle_help_menu(void);
 
-// Initialize the editor state
-void editor_init(editor_state_t* state, const char* filename) {
-    // Clear all lines
+void editor_init(void) {
+    // Clear the buffer
     for (int i = 0; i < EDITOR_MAX_LINES; i++) {
-        state->lines[i][0] = '\0';
+        for (int j = 0; j < EDITOR_MAX_COLS; j++) {
+            editor_state.buffer[i][j] = '\0';
+        }
     }
     
-    // Initialize state
-    state->num_lines = 1;  // Start with one empty line
-    state->cursor_x = 0;
-    state->cursor_y = 0;
-    state->screen_offset = 0;
-    state->modified = false;
-    state->exit_requested = false;
-    
-    // Copy filename
-    int i = 0;
-    while (filename[i] && i < FS_MAX_NAME_LENGTH - 1) {
-        state->filename[i] = filename[i];
-        i++;
-    }
-    state->filename[i] = '\0';
+    editor_state.cursor_x = 0;
+    editor_state.cursor_y = 0;
+    editor_state.scroll_x = 0;
+    editor_state.scroll_y = 0;
+    editor_state.lines = 1;
+    editor_state.modified = false;
+    editor_state.has_filename = false;
+    editor_state.help_menu_open = false;
+    editor_state.filename[0] = '\0';
 }
 
-// Update editor_load_file
-void editor_load_file(editor_state_t* state) {
-    // Find the file by path
-    state->file_node = fs_find_node_by_path(state->filename);
-    
-    if (!state->file_node) {
-        // File doesn't exist, start with empty buffer
+void editor_load_file(const char* filename) {
+    if (!filename || strlen(filename) == 0) {
         return;
     }
     
-    // Check if it's a file (not a directory)
-    if (state->file_node->type != FS_TYPE_FILE) {
+    // Check if filesystem is mounted
+    if (!fs_is_mounted()) {
+        terminal_writestring("Error: Filesystem not mounted\n");
         return;
     }
     
-    // Read file content line by line
-    int line = 0;
-    int col = 0;
-    const char* content = state->file_node->content;
-    
-    while (*content && line < EDITOR_MAX_LINES) {
-        if (*content == '\n') {
-            // End of line
-            state->lines[line][col] = '\0';
-            line++;
-            col = 0;
-        } else if (col < EDITOR_MAX_LINE_LENGTH - 1) {
-            // Add character to current line
-            state->lines[line][col] = *content;
-            col++;
-        }
-        content++;
-    }
-    
-    // Null-terminate the last line
-    if (line < EDITOR_MAX_LINES) {
-        state->lines[line][col] = '\0';
-        state->num_lines = line + 1;
-    } else {
-        state->num_lines = EDITOR_MAX_LINES;
-    }
-}
-
-// Update editor_save_file
-void editor_save_file(editor_state_t* state) {
-    // Create a buffer for the entire file content
-    char content[FS_MAX_CONTENT_SIZE];
-    size_t content_pos = 0;
-    
-    // Concatenate all lines
-    for (int i = 0; i < state->num_lines; i++) {
-        // Check if there's enough space
-        if (content_pos + strlen(state->lines[i]) + 1 >= FS_MAX_CONTENT_SIZE) {
-            break;
-        }
-        
-        // Copy line content
-        strcpy(&content[content_pos], state->lines[i]);
-        content_pos += strlen(state->lines[i]);
-        
-        // Add newline (except for the last line)
-        if (i < state->num_lines - 1) {
-            content[content_pos++] = '\n';
-        }
-    }
-    
-    // Null-terminate the content
-    content[content_pos] = '\0';
-    
-    // Get the directory and filename
-    char* last_slash = strrchr(state->filename, '/');
-    char filename[FS_MAX_NAME_LENGTH];
-    fs_node_t* dir;
-    
-    if (last_slash) {
-        // Extract directory path and filename
-        *last_slash = '\0';  // Temporarily split the path
-        dir = fs_find_node_by_path(state->filename);
-        strcpy(filename, last_slash + 1);
-        *last_slash = '/';   // Restore the path
-        
-        if (!dir) {
-            return;  // Directory not found
-        }
-    } else {
-        // No directory specified, use current directory
-        dir = fs_get_cwd();
-        strcpy(filename, state->filename);
-    }
+    strcpy(editor_state.filename, filename);
+    editor_state.has_filename = true;
     
     // Check if file exists
-    fs_node_t* file = fs_find_node(dir, filename);
+    if (!fs_exists(filename)) {
+        // File doesn't exist, start with empty buffer
+        editor_init();
+        strcpy(editor_state.filename, filename);
+        editor_state.has_filename = true;
+        return;
+    }
     
+    // Open the file
+    fs_file_handle_t* file = fs_open(filename, "r");
     if (!file) {
-        // Create new file
-        file = fs_create_file(dir, filename);
-        if (!file) {
-            return;  // Failed to create file
-        }
-        state->file_node = file;
+        terminal_writestring("Error: Failed to open file\n");
+        return;
     }
     
-    // Write content to file
-    fs_write_file(file, content);
+    if (file->is_directory) {
+        terminal_writestring("Error: Not a file\n");
+        fs_close(file);
+        return;
+    }
     
-    // Mark as not modified
-    state->modified = false;
+    // Load file content into buffer
+    editor_init();
+    strcpy(editor_state.filename, filename);
+    editor_state.has_filename = true;
+    
+    char buffer[512];
+    size_t bytes_read;
+    int line = 0, col = 0;
+    
+    while ((bytes_read = fs_read(file, buffer, sizeof(buffer))) > 0 && line < EDITOR_MAX_LINES) {
+        for (size_t i = 0; i < bytes_read && line < EDITOR_MAX_LINES; i++) {
+            if (buffer[i] == '\n') {
+                line++;
+                col = 0;
+            } else if (col < EDITOR_MAX_COLS - 1) {
+                editor_state.buffer[line][col] = buffer[i];
+                col++;
+            }
+        }
+    }
+    
+    editor_state.lines = line + 1;
+    fs_close(file);
 }
 
-// Get a key from the keyboard with special key handling
-char editor_get_key(editor_state_t* state) {
-    (void)state;
-
-    // Check if a key is available
-    if ((inb(KEYBOARD_STATUS_PORT) & 1) == 0) {
-        return 0; // No key available
+void editor_save_file(void) {
+    if (!editor_state.has_filename) {
+        terminal_writestring("No filename specified\n");
+        return;
     }
     
-    // Read the scancode
-    uint8_t scancode = inb(KEYBOARD_DATA_PORT);
-    
-    // Check for extended keys (prefixed with 0xE0)
-    if (scancode == 0xE0) {
-        // Wait for the next byte
-        while ((inb(KEYBOARD_STATUS_PORT) & 1) == 0) {
-            // Wait for the next byte
-        }
-        
-        scancode = inb(KEYBOARD_DATA_PORT);
-        
-        // Translate extended scancodes to our special key values
-        char special_key = 0;
-        switch (scancode) {
-            case 0x48: // Up arrow
-                special_key = KEY_ARROW_UP;
-                break;
-            case 0x50: // Down arrow
-                special_key = KEY_ARROW_DOWN;
-                break;
-            case 0x4B: // Left arrow
-                special_key = KEY_ARROW_LEFT;
-                break;
-            case 0x4D: // Right arrow
-                special_key = KEY_ARROW_RIGHT;
-                break;
-        }
-        
-        // If we recognized a special key, return it
-        if (special_key) {
-            return special_key;
-        }
-    }
-    // Check for Ctrl+X (X is scancode 0x2D, Ctrl modifies it)
-    else if (scancode == 0x2D) {
-        // This is a simplified check - in a real implementation,
-        // you'd track the state of modifier keys like Ctrl
-        return KEY_CTRL_X;
-    }
-    // Regular key - convert to ASCII
-    else if (scancode < 128) {
-        // Use the keyboard mapping from your keyboard driver
-        // This assumes your keyboard driver maintains the state of shift, etc.
-        char key = 0;
-        
-        // Simple ASCII mapping for demonstration
-        if (scancode < 128) {
-            // Process the scancode to get the ASCII character
-            // This is a simplified version - your actual implementation
-            // would use your keyboard driver's mapping
-            keyboard_process_scancode(scancode);
-            key = keyboard_get_key();
-        }
-        
-        return key;
+    if (!fs_is_mounted()) {
+        terminal_writestring("Error: Filesystem not mounted\n");
+        return;
     }
     
-    return 0; // No recognized key
+    // Note: Since we haven't implemented file writing in FAT32 yet,
+    // this will show an error message
+    terminal_writestring("Error: File writing not yet implemented in FAT32\n");
+    terminal_writestring("File would be saved as: ");
+    terminal_writestring(editor_state.filename);
+    terminal_writestring("\n");
+    
+    // TODO: Implement this when fs_write is available
+    /*
+    fs_file_handle_t* file = fs_open(editor_state.filename, "w");
+    if (!file) {
+        terminal_writestring("Error: Could not create file\n");
+        return;
+    }
+    
+    // Convert buffer to string and write
+    for (int line = 0; line < editor_state.lines; line++) {
+        fs_write(file, editor_state.buffer[line], strlen(editor_state.buffer[line]));
+        if (line < editor_state.lines - 1) {
+            fs_write(file, "\n", 1);
+        }
+    }
+    
+    fs_close(file);
+    editor_state.modified = false;
+    terminal_writestring("File saved: ");
+    terminal_writestring(editor_state.filename);
+    terminal_writestring("\n");
+    */
 }
 
-// Handle a key press in the editor
-void editor_handle_key(editor_state_t* state, char key) {
-    // Handle special keys
-    if (key == '\b') {  // Backspace
-        if (state->cursor_x > 0) {
-            // Remove character at cursor position
-            int line_len = strlen(state->lines[state->cursor_y]);
-            for (int i = state->cursor_x - 1; i < line_len; i++) {
-                state->lines[state->cursor_y][i] = state->lines[state->cursor_y][i + 1];
-            }
-            state->cursor_x--;
-            state->modified = true;
-        } else if (state->cursor_y > 0) {
-            // Merge with previous line
-            int prev_line_len = strlen(state->lines[state->cursor_y - 1]);
-            int curr_line_len = strlen(state->lines[state->cursor_y]);
-            
-            // Check if there's room to merge
-            if (prev_line_len + curr_line_len < EDITOR_MAX_LINE_LENGTH) {
-                // Append current line to previous line
-                strcat(state->lines[state->cursor_y - 1], state->lines[state->cursor_y]);
-                
-                // Move all lines up
-                for (int i = state->cursor_y; i < state->num_lines - 1; i++) {
-                    strcpy(state->lines[i], state->lines[i + 1]);
-                }
-                
-                // Clear the last line if we're reducing line count
-                if (state->num_lines > 1) {
-                    state->num_lines--;
-                    state->lines[state->num_lines][0] = '\0';
-                }
-                
-                // Move cursor to end of previous line
-                state->cursor_y--;
-                state->cursor_x = prev_line_len;
-                
-                // Adjust screen offset if needed
-                if (state->cursor_y < state->screen_offset) {
-                    state->screen_offset = state->cursor_y;
-                }
-                
-                state->modified = true;
-            }
-        }
-    } else if (key == '\n') {  // Enter
-        // Check if we have room for a new line
-        if (state->num_lines < EDITOR_MAX_LINES) {
-            // Move all lines down to make room for the new line
-            for (int i = state->num_lines; i > state->cursor_y + 1; i--) {
-                strcpy(state->lines[i], state->lines[i - 1]);
-            }
-            
-            // Split the current line at cursor position
-            state->lines[state->cursor_y + 1][0] = '\0';
-            
-            // Copy the part after cursor to the new line
-            strcpy(state->lines[state->cursor_y + 1], &state->lines[state->cursor_y][state->cursor_x]);
-            
-            // Truncate the current line at cursor position
-            state->lines[state->cursor_y][state->cursor_x] = '\0';
-            
-            // Increment line count
-            state->num_lines++;
-            
-            // Move cursor to beginning of new line
-            state->cursor_y++;
-            state->cursor_x = 0;
-            
-            // Adjust screen offset if needed
-            if (state->cursor_y >= state->screen_offset + VGA_HEIGHT - 2) {
-                state->screen_offset = state->cursor_y - (VGA_HEIGHT - 3);
-            }
-            
-            state->modified = true;
-        }
-    } else if ((unsigned char)key == KEY_F1) {
-        // Show help menu
-        editor_display_help_menu(state);
-    } else if (key == KEY_CTRL_X) {
-        // Set exit flag
-        state->exit_requested = true;
-    } 
-    // Handle arrow keys - make sure these are defined with values outside ASCII range
-    else if (key == KEY_ARROW_UP) {
-        // Move cursor up
-        if (state->cursor_y > 0) {
-            state->cursor_y--;
-            
-            // Adjust cursor_x if the new line is shorter
-            int line_len = strlen(state->lines[state->cursor_y]);
-            if (state->cursor_x > line_len) {
-                state->cursor_x = line_len;
-            }
-            
-            // Adjust screen offset if needed
-            if (state->cursor_y < state->screen_offset) {
-                state->screen_offset = state->cursor_y;
-            }
-        }
-    } else if (key == KEY_ARROW_DOWN) {
-        // Move cursor down
-        if (state->cursor_y < state->num_lines - 1) {
-            state->cursor_y++;
-            
-            // Adjust cursor_x if the new line is shorter
-            int line_len = strlen(state->lines[state->cursor_y]);
-            if (state->cursor_x > line_len) {
-                state->cursor_x = line_len;
-            }
-            
-            // Adjust screen offset if needed
-            if (state->cursor_y >= state->screen_offset + VGA_HEIGHT - 2) {
-                state->screen_offset = state->cursor_y - (VGA_HEIGHT - 3);
-            }
-        }
-    } else if (key == KEY_ARROW_LEFT) {
-        // Move cursor left
-        if (state->cursor_x > 0) {
-            state->cursor_x--;
-        } else if (state->cursor_y > 0) {
-            // Move to end of previous line
-            state->cursor_y--;
-            state->cursor_x = strlen(state->lines[state->cursor_y]);
-            
-            // Adjust screen offset if needed
-            if (state->cursor_y < state->screen_offset) {
-                state->screen_offset = state->cursor_y;
-            }
-        }
-    } else if (key == KEY_ARROW_RIGHT) {
-        // Move cursor right
-        int line_len = strlen(state->lines[state->cursor_y]);
-        if (state->cursor_x < line_len) {
-            state->cursor_x++;
-        } else if (state->cursor_y < state->num_lines - 1) {  // FIX: Changed state.num_lines to state->num_lines
-            // Move to beginning of next line
-            state->cursor_y++;
-            state->cursor_x = 0;
-            
-            // Adjust screen offset if needed
-            if (state->cursor_y >= state->screen_offset + VGA_HEIGHT - 2) {
-                state->screen_offset = state->cursor_y - (VGA_HEIGHT - 3);
-            }
-        }
-    }
-    // Handle printable ASCII characters
-    else if (key >= 32 && key <= 126) {
-        // Check if there's room in the line
-        int line_len = strlen(state->lines[state->cursor_y]);
-        if (line_len < EDITOR_MAX_LINE_LENGTH - 1) {
-            // Make room for the new character
-            for (int i = line_len; i >= state->cursor_x; i--) {
-                state->lines[state->cursor_y][i + 1] = state->lines[state->cursor_y][i];
-            }
-            
-            // Insert the character
-            state->lines[state->cursor_y][state->cursor_x] = key;
-            state->cursor_x++;
-            state->modified = true;
-        }
-    }
-}
-
-// Display the editor content
-void editor_display(editor_state_t* state) {
-    // Save current terminal color
-    uint8_t old_color = terminal_color;
-    
-    // Display header
-    terminal_setcolor(vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY));
-    terminal_putentryat(' ', terminal_color, 0, 0);
-    terminal_writestring(" PIA Editor - ");
-    terminal_writestring(state->filename);
-    if (state->modified) {
-        terminal_writestring(" [modified]");
-    }
-    
-    // Fill the rest of the header line
-    for (int i = 0; i < VGA_WIDTH - strlen(" PIA Editor - ") - strlen(state->filename) - 
-                    (state->modified ? strlen(" [modified]") : 0); i++) {
-        terminal_putentryat(' ', terminal_color, 
-                          strlen(" PIA Editor - ") + strlen(state->filename) + 
-                          (state->modified ? strlen(" [modified]") : 0) + i, 0);
-    }
-    
-    // Display editor content
-    terminal_setcolor(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
-    
-    // Calculate visible lines
-    int visible_lines = VGA_HEIGHT - 2;  // Header and footer
-    
-    // Display each visible line
-    for (int i = 0; i < visible_lines; i++) {
-        int line_num = state->screen_offset + i;
-        
-        // Clear the line
-        for (int j = 0; j < VGA_WIDTH; j++) {
-            terminal_putentryat(' ', terminal_color, j, i + 1);
-        }
-        
-        // Display line content if it exists
-        if (line_num < state->num_lines) {
-            int line_len = strlen(state->lines[line_num]);
-            for (int j = 0; j < line_len && j < VGA_WIDTH; j++) {
-                terminal_putentryat(state->lines[line_num][j], terminal_color, j, i + 1);
-            }
-        }
-    }
-    
-    // Display footer
-    terminal_setcolor(vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY));
-    terminal_putentryat(' ', terminal_color, 0, VGA_HEIGHT - 1);
-    terminal_writestring(" F1: Open Help Menu");
-
-    // Fill the rest of the footer line
-    for (int i = 0; i < VGA_WIDTH - strlen(" F1: Open Help Menu"); i++) {
-        terminal_putentryat(' ', terminal_color, strlen(" F1: Open Help Menu") + i, VGA_HEIGHT - 1);
-    }
-
-    // Position cursor
-    int y = state->cursor_y - state->screen_offset + 1;
-    if (y < 1) y = 1;
-    if (y >= VGA_HEIGHT - 1) y = VGA_HEIGHT - 2;
-    update_cursor(y, state->cursor_x);
-    
-    // Restore original color
-    terminal_setcolor(old_color);
-}
-
-// Display help menu
-void editor_display_help_menu(editor_state_t* state) {
-    (void)state;
-
-    // Save current terminal color
-    uint8_t old_color = terminal_color;
-    
-    // Clear a portion of the screen for the menu
-    int menu_start_row = (VGA_HEIGHT - 8) / 2;
-    int menu_width = 40;
-    int menu_start_col = (VGA_WIDTH - menu_width) / 2;
-    
-    // Draw menu box
-    for (int row = menu_start_row; row < menu_start_row + 8; row++) {
-        for (int col = menu_start_col; col < menu_start_col + menu_width; col++) {
-            if (row == menu_start_row || row == menu_start_row + 7 || 
-                col == menu_start_col || col == menu_start_col + menu_width - 1) {
-                // Draw border
-                terminal_setcolor(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE));
-                terminal_putentryat(' ', terminal_color, col, row);
-            } else {
-                // Fill background
-                terminal_setcolor(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE));
-                terminal_putentryat(' ', terminal_color, col, row);
-            }
-        }
-    }
-    
-    // Draw menu title
-    terminal_setcolor(vga_entry_color(VGA_COLOR_BROWN, VGA_COLOR_BLUE));
-    const char* title = " PIA Editor Help ";
-    int title_col = menu_start_col + (menu_width - strlen(title)) / 2;
-    for (int i = 0; i < strlen(title); i++) {
-        terminal_putentryat(title[i], terminal_color, title_col + i, menu_start_row);
-    }
-
-    // Draw menu options
-    terminal_setcolor(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE));
-    const char* option1 = "1. Save and Exit";
-    const char* option2 = "2. Discard changes and Exit";
-    const char* option3 = "3. Save";
-    const char* option4 = "4. Return to Editor";
-
-    // For option1, increment the column position for each character
-    for (int i = 0; i < strlen(option1); i++) {
-        terminal_putentryat(option1[i], terminal_color, menu_start_col + 2 + i, menu_start_row + 2);
-    }
-
-    // For option2, increment the column position for each character
-    for (int i = 0; i < strlen(option2); i++) {
-        terminal_putentryat(option2[i], terminal_color, menu_start_col + 2 + i, menu_start_row + 3);
-    }
-
-    // For option3, increment the column position for each character
-    for (int i = 0; i < strlen(option3); i++) {
-        terminal_putentryat(option3[i], terminal_color, menu_start_col + 2 + i, menu_start_row + 4);
-    }
-
-    // For option4, increment the column position for each character
-    for (int i = 0; i < strlen(option4); i++) {
-        terminal_putentryat(option4[i], terminal_color, menu_start_col + 2 + i, menu_start_row + 5);
-    }
-    
-    // Restore original color
-    terminal_setcolor(old_color);
-}
-
-// Handle help menu
-bool editor_handle_help_menu(editor_state_t* state) {
-    editor_display_help_menu(state);
-    
-    // Wait for a key press
+char editor_get_key(void) {
     while (1) {
         keyboard_poll();
         char key = keyboard_get_key();
-        
         if (key != 0) {
-            switch (key) {
-                case '1':  // Save and Exit
-                    editor_save_file(state);
-                    return false;  // Exit editor
-                
-                case '2':  // Discard changes and Exit
-                    return false;  // Exit editor without saving
-                
-                case '3':  // Save
-                    editor_save_file(state);
-                    return true;   // Continue editing
-                
-                case '4':  // Return to Editor
-                case 27:   // ESC key
-                    return true;   // Continue editing
-            }
+            return key;
         }
     }
 }
 
-// Main editor function
-void cmd_pia(const char* args) {
-    // Skip leading spaces
-    while (*args == ' ') args++;
-    
-    // Check if a filename was provided
-    if (*args == '\0') {
-        terminal_writestring("Usage: pia <filename>\n");
+void editor_insert_char(char c) {
+    if (editor_state.cursor_y >= EDITOR_MAX_LINES || editor_state.cursor_x >= EDITOR_MAX_COLS - 1) {
         return;
     }
     
-    // Initialize editor state
-    editor_state_t state;
-    editor_init(&state, args);
+    // Shift characters to the right
+    for (int i = EDITOR_MAX_COLS - 2; i > editor_state.cursor_x; i--) {
+        editor_state.buffer[editor_state.cursor_y][i] = editor_state.buffer[editor_state.cursor_y][i - 1];
+    }
     
-    // Load file if it exists
-    editor_load_file(&state);
-    
-    // Clear screen and display editor
-    terminal_clear();
-    editor_display(&state);
-    
-    // Main editor loop
-    bool running = true;
-    while (running) {
-        // Poll keyboard for input
-        keyboard_poll();
+    editor_state.buffer[editor_state.cursor_y][editor_state.cursor_x] = c;
+    editor_state.cursor_x++;
+    editor_state.modified = true;
+}
+
+void editor_delete_char(void) {
+    if (editor_state.cursor_x > 0) {
+        editor_state.cursor_x--;
         
-        // Check for special keys first (arrow keys, F1)
-        if ((inb(KEYBOARD_STATUS_PORT) & 1) != 0) {
-            uint8_t scancode = inb(KEYBOARD_DATA_PORT);
-            
-            // Check for F1 key
-            if (scancode == 0x3B) {  // F1 key
-                // Display help menu and get result
-                bool continue_editing = editor_handle_help_menu(&state);
-                if (!continue_editing) {
-                    running = false;
-                } else {
-                    // Redraw the editor
-                    editor_display(&state);
-                }
-                continue;
-            }
-            
-            // Check for extended keys (arrow keys)
-            if (scancode == 0xE0) {
-                // Extended key - read the next byte
-                while ((inb(KEYBOARD_STATUS_PORT) & 1) == 0) {
-                    // Wait for the next byte
-                }
-                
-                scancode = inb(KEYBOARD_DATA_PORT);
-                
-                // Handle arrow keys
-                switch (scancode) {
-                    case 0x48: // Up arrow
-                        if (state.cursor_y > 0) {
-                            state.cursor_y--;
-                            // Adjust cursor_x if the new line is shorter
-                            int line_len = strlen(state.lines[state.cursor_y]);
-                            if (state.cursor_x > line_len) {
-                                state.cursor_x = line_len;
-                            }
-                            
-                            // Adjust screen offset if needed
-                            if (state.cursor_y < state.screen_offset) {
-                                state.screen_offset = state.cursor_y;
-                            }
-                            
-                            // Ensure cursor stays within valid display area
-                            if (state.cursor_y - state.screen_offset + 1 < 1) {
-                                state.screen_offset = state.cursor_y;
-                            }
-                            
-                            editor_display(&state);
-                        }
-                        continue;
-                        
-                    case 0x50: // Down arrow
-                        if (state.cursor_y < state.num_lines - 1) {
-                            state.cursor_y++;
-                            // Adjust cursor_x if the new line is shorter
-                            int line_len = strlen(state.lines[state.cursor_y]);
-                            if (state.cursor_x > line_len) {
-                                state.cursor_x = line_len;
-                            }
-                            
-                            // Adjust screen offset if needed to ensure cursor stays within valid display area
-                            if (state.cursor_y - state.screen_offset + 1 > VGA_HEIGHT - 2) {
-                                state.screen_offset = state.cursor_y - (VGA_HEIGHT - 3);
-                            }
-                            
-                            editor_display(&state);
-                        }
-                        continue;
-                        
-                    case 0x4B: // Left arrow
-                        if (state.cursor_x > 0) {
-                            state.cursor_x--;
-                        } else if (state.cursor_y > 0) {
-                            // Move to end of previous line
-                            state.cursor_y--;
-                            state.cursor_x = strlen(state.lines[state.cursor_y]);
-                            
-                            // Adjust screen offset if needed
-                            if (state.cursor_y < state.screen_offset) {
-                                state.screen_offset = state.cursor_y;
-                            }
-                        }
-                        editor_display(&state);
-                        continue;
-                        
-                    case 0x4D: // Right arrow
-                        {
-                            int line_len = strlen(state.lines[state.cursor_y]);
-                            if (state.cursor_x < line_len) {
-                                state.cursor_x++;
-                            } else if (state.cursor_y < state.num_lines - 1) {
-                                // Move to beginning of next line
-                                state.cursor_y++;
-                                state.cursor_x = 0;
-                                
-                                // Adjust screen offset if needed
-                                if (state.cursor_y >= state.screen_offset + VGA_HEIGHT - 2) {
-                                    state.screen_offset = state.cursor_y - (VGA_HEIGHT - 3);
-                                }
-                            }
-                            editor_display(&state);
-                            continue;
-                        }
-                }
-            }
+        // Shift characters to the left
+        for (int i = editor_state.cursor_x; i < EDITOR_MAX_COLS - 1; i++) {
+            editor_state.buffer[editor_state.cursor_y][i] = editor_state.buffer[editor_state.cursor_y][i + 1];
         }
-        
-        // Process regular keys from the keyboard buffer
-        char key = editor_get_key(&state);
-        
-        if (key != 0) {
-            // Check for special key combinations
-            if (key == 24) { // Ctrl+X (ASCII 24 = CAN)
-                // Save and exit
-                editor_save_file(&state);
-                running = false;
-            } else {
-                // Handle regular key
-                editor_handle_key(&state, key);
-                editor_display(&state);
+        editor_state.buffer[editor_state.cursor_y][EDITOR_MAX_COLS - 1] = '\0';
+        editor_state.modified = true;
+    } else if (editor_state.cursor_y > 0) {
+        // Move to end of previous line
+        editor_state.cursor_y--;
+        editor_state.cursor_x = strlen(editor_state.buffer[editor_state.cursor_y]);
+        editor_state.modified = true;
+    }
+}
+
+void editor_move_cursor(int dx, int dy) {
+    editor_state.cursor_x += dx;
+    editor_state.cursor_y += dy;
+    
+    // Bounds checking
+    if (editor_state.cursor_x < 0) {
+        editor_state.cursor_x = 0;
+    }
+    if (editor_state.cursor_y < 0) {
+        editor_state.cursor_y = 0;
+    }
+    if (editor_state.cursor_y >= editor_state.lines) {
+        editor_state.cursor_y = editor_state.lines - 1;
+    }
+    
+    // Adjust cursor_x based on line length
+    int line_length = strlen(editor_state.buffer[editor_state.cursor_y]);
+    if (editor_state.cursor_x > line_length) {
+        editor_state.cursor_x = line_length;
+    }
+    
+    editor_scroll_if_needed();
+}
+
+void editor_scroll_if_needed(void) {
+    // Horizontal scrolling
+    if (editor_state.cursor_x < editor_state.scroll_x) {
+        editor_state.scroll_x = editor_state.cursor_x;
+    }
+    if (editor_state.cursor_x >= editor_state.scroll_x + VGA_WIDTH) {
+        editor_state.scroll_x = editor_state.cursor_x - VGA_WIDTH + 1;
+    }
+    
+    // Vertical scrolling
+    if (editor_state.cursor_y < editor_state.scroll_y) {
+        editor_state.scroll_y = editor_state.cursor_y;
+    }
+    if (editor_state.cursor_y >= editor_state.scroll_y + VGA_HEIGHT - 2) { // -2 for status line
+        editor_state.scroll_y = editor_state.cursor_y - VGA_HEIGHT + 3;
+    }
+}
+
+void editor_handle_key(char key) {
+    if (key == KEY_CTRL_Q) {
+        // Quit editor
+        return;
+    } else if (key == KEY_CTRL_S) {
+        // Save file
+        editor_save_file();
+    } else if (key == KEY_CTRL_O) {
+        // Open file (simplified)
+        terminal_writestring("Open file feature not implemented\n");
+    } else if (key == KEY_F1) {
+        // Toggle help menu
+        editor_state.help_menu_open = !editor_state.help_menu_open;
+    } else if (key == '\n') {
+        // Enter key - new line
+        if (editor_state.cursor_y < EDITOR_MAX_LINES - 1) {
+            editor_state.cursor_y++;
+            editor_state.cursor_x = 0;
+            if (editor_state.cursor_y >= editor_state.lines) {
+                editor_state.lines = editor_state.cursor_y + 1;
             }
+            editor_state.modified = true;
         }
-        
-        // Check exit flag
-        if (state.exit_requested) {
-            running = false;
+    } else if (key == '\b') {
+        // Backspace
+        editor_delete_char();
+    }
+    else if (key == KEY_ARROW_UP) {
+        editor_move_cursor(0, -1);
+    } else if (key == KEY_ARROW_DOWN) {
+        editor_move_cursor(0, 1);
+    } else if (key == KEY_ARROW_LEFT) {
+        editor_move_cursor(-1, 0);
+    } else if (key == KEY_ARROW_RIGHT) {
+        editor_move_cursor(1, 0);
+    } else if (key >= 32 && key <= 126) {
+        // Printable character
+        editor_insert_char(key);
+    }
+    
+    editor_scroll_if_needed();
+}
+
+void editor_display(void) {
+    // Clear screen
+    for (size_t y = 0; y < VGA_HEIGHT; y++) {
+        for (size_t x = 0; x < VGA_WIDTH; x++) {
+            terminal_putentryat(' ', vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK), x, y);
         }
     }
     
-    // Clear screen when exiting
-    terminal_clear();
-    terminal_writestring("File saved: ");
-    terminal_writestring(state.filename);
-    terminal_writestring("\n");
+    // Display buffer content
+    for (int line = 0; line < VGA_HEIGHT - 2 && line + editor_state.scroll_y < editor_state.lines; line++) {
+        int buffer_line = line + editor_state.scroll_y;
+        for (int col = 0; col < VGA_WIDTH && col + editor_state.scroll_x < EDITOR_MAX_COLS; col++) {
+            int buffer_col = col + editor_state.scroll_x;
+            char c = editor_state.buffer[buffer_line][buffer_col];
+            if (c == '\0') break;
+            terminal_putentryat(c, vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK), col, line);
+        }
+    }
+    
+    // Display status line
+    terminal_putentryat(' ', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), 0, VGA_HEIGHT - 2);
+    
+    // Status line content
+    const char* status = editor_state.has_filename ? editor_state.filename : "[No Name]";
+    for (size_t i = 0; i < strlen(status) && i < VGA_WIDTH; i++) {
+        terminal_putentryat(status[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), i, VGA_HEIGHT - 2);
+    }
+    
+    if (editor_state.modified) {
+        terminal_putentryat('*', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), strlen(status), VGA_HEIGHT - 2);
+    }
+    
+    // Fill rest of status line
+    for (size_t i = strlen(status) + (editor_state.modified ? 1 : 0); i < VGA_WIDTH; i++) {
+        terminal_putentryat(' ', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), i, VGA_HEIGHT - 2);
+    }
+    
+    // Display help line
+    const char* help_text = " F1: Open Help Menu";
+    for (size_t i = 0; i < strlen(help_text) && i < VGA_WIDTH; i++) {
+        terminal_putentryat(help_text[i], vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE), i, VGA_HEIGHT - 1);
+    }
+    
+        // Fill rest of help line
+    for (size_t i = strlen(help_text); i < VGA_WIDTH; i++) {
+        terminal_putentryat(' ', vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE), i, VGA_HEIGHT - 1);
+    }
+    
+    // Position cursor
+    int screen_x = editor_state.cursor_x - editor_state.scroll_x;
+    int screen_y = editor_state.cursor_y - editor_state.scroll_y;
+    
+    if (screen_x >= 0 && screen_x < VGA_WIDTH && screen_y >= 0 && screen_y < VGA_HEIGHT - 2) {
+        update_cursor(screen_y, screen_x);
+    }
+}
+
+void editor_display_help_menu(void) {
+    // Display help menu overlay
+    int start_x = 10;
+    int start_y = 5;
+    int width = 60;
+    int height = 15;
+    
+    // Draw background
+    for (int y = start_y; y < start_y + height && y < VGA_HEIGHT; y++) {
+        for (int x = start_x; x < start_x + width && x < VGA_WIDTH; x++) {
+            terminal_putentryat(' ', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), x, y);
+        }
+    }
+    
+    // Draw border
+    for (int x = start_x; x < start_x + width && x < VGA_WIDTH; x++) {
+        terminal_putentryat('-', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), x, start_y);
+        terminal_putentryat('-', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), x, start_y + height - 1);
+    }
+    
+    for (int y = start_y; y < start_y + height && y < VGA_HEIGHT; y++) {
+        terminal_putentryat('|', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x, y);
+        terminal_putentryat('|', vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + width - 1, y);
+    }
+    
+    // Display help content
+    const char* title = "PIA Text Editor - Help";
+    for (size_t i = 0; i < strlen(title) && start_x + 2 + i < VGA_WIDTH; i++) {
+        terminal_putentryat(title[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 2);
+    }
+    
+    const char* option1 = "Ctrl+S: Save file";
+    const char* option2 = "Ctrl+O: Open file";
+    const char* option3 = "Ctrl+Q: Quit editor";
+    const char* option4 = "F1: Toggle this help menu";
+    
+    for (size_t i = 0; i < strlen(option1) && start_x + 2 + i < VGA_WIDTH; i++) {
+        terminal_putentryat(option1[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 4);
+    }
+    
+    for (size_t i = 0; i < strlen(option2) && start_x + 2 + i < VGA_WIDTH; i++) {
+        terminal_putentryat(option2[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 5);
+    }
+    
+    for (size_t i = 0; i < strlen(option3) && start_x + 2 + i < VGA_WIDTH; i++) {
+        terminal_putentryat(option3[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 6);
+    }
+    
+    for (size_t i = 0; i < strlen(option4) && start_x + 2 + i < VGA_WIDTH; i++) {
+        terminal_putentryat(option4[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 7);
+    }
+}
+
+void editor_handle_help_menu(void) {
+    while (editor_state.help_menu_open) {
+        editor_display();
+        editor_display_help_menu();
+        
+        keyboard_poll();
+        char key = keyboard_get_key();
+        
+        if (key == KEY_F1 || key == KEY_ESCAPE) {
+            editor_state.help_menu_open = false;
+        }
+    }
+}
+
+void cmd_pia(const char* args) {
+    // Initialize editor
+    editor_init();
+    
+    // If filename provided, load it
+    if (args && strlen(args) > 0) {
+        // Skip leading spaces
+        while (*args == ' ') args++;
+        
+        if (strlen(args) > 0) {
+            editor_load_file(args);
+        }
+    }
+    
+    // Main editor loop
+    while (1) {
+        if (editor_state.help_menu_open) {
+            editor_handle_help_menu();
+        } else {
+            editor_display();
+            
+            keyboard_poll();
+            char key = keyboard_get_key();
+            
+            if (key == KEY_CTRL_Q) {
+                break; // Exit editor
+            }
+            
+            if (key != 0) {
+                editor_handle_key(key);
+            }
+        }
+    }
+    
+    // Clear screen and return to terminal
+    for (size_t y = 0; y < VGA_HEIGHT; y++) {
+        for (size_t x = 0; x < VGA_WIDTH; x++) {
+            terminal_putentryat(' ', vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK), x, y);
+        }
+    }
+    
+    terminal_row = 0;
+    terminal_column = 0;
 }

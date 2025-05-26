@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-/* Hardware text mode color constants. */
 enum vga_color {
     VGA_COLOR_BLACK = 0,
     VGA_COLOR_BLUE = 1,
@@ -24,9 +23,15 @@ enum vga_color {
     VGA_COLOR_WHITE = 15,
 };
 
-#define VGA_WIDTH   80
-#define VGA_HEIGHT  25
-#define VGA_MEMORY  0xB8000
+#define VGA_WIDTH 80
+#define VGA_HEIGHT 25
+#define VGA_MEMORY 0xB8000
+
+// Global variables
+extern size_t terminal_row;
+extern size_t terminal_column;
+extern uint8_t terminal_color;
+extern uint16_t* terminal_buffer;
 
 static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg) {
     return fg | bg << 4;
@@ -36,13 +41,14 @@ static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
     return (uint16_t) uc | (uint16_t) color << 8;
 }
 
-// Terminal state variables (declared as extern so they can be accessed from other files)
-extern size_t terminal_row;
-extern size_t terminal_column;
-extern uint8_t terminal_color;
-extern uint16_t* terminal_buffer;
-
-// Function prototypes
+// Terminal function declarations
+void terminal_initialize(void);
+void terminal_setcolor(uint8_t color);
+uint8_t terminal_getcolor(void);
+void terminal_putentryat(char c, uint8_t color, size_t x, size_t y);
+void terminal_putchar(char c);
+void terminal_write(const char* data, size_t size);
+void terminal_writestring(const char* data);
 void update_cursor(int row, int col);
 
-#endif
+#endif /* VGA_H */

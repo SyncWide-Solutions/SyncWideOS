@@ -7,6 +7,10 @@
 #include "../include/filesystem.h"
 #include "../include/vga.h"
 #include "../include/io.h"
+#include "../include/pci.h"
+#include "../include/network.h"
+#include "../include/dhcp.h"
+#include "../include/kernel.h"
 
 // Multiboot header definitions
 #define MULTIBOOT_MAGIC 0x1BADB002
@@ -59,6 +63,8 @@ uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
 #define MAX_COMMAND_LENGTH 256
 char current_command[MAX_COMMAND_LENGTH];
 size_t command_length = 0;
+
+// Remove the memory_init() function from here - it's defined in memory.c
 
 void terminal_initialize(void) 
 {
@@ -124,106 +130,6 @@ void terminal_writestring(const char* data)
     terminal_write(data, strlen(data));
 }
 
-/* Keyboard driver implementation */
-#define KEYBOARD_DATA_PORT 0x60
-#define KEYBOARD_STATUS_PORT 0x64
-#define KEYBOARD_BUFFER_SIZE 16
-
-static char keyboard_buffer[KEYBOARD_BUFFER_SIZE];
-static uint8_t buffer_head = 0;
-static uint8_t buffer_tail = 0;
-static bool shift_pressed = false;
-
-/* US keyboard layout scancode to ASCII mapping */
-static const char keymap[128] = {
-    0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
-    '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
-    0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',
-    0, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0, '*',
-    0, ' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
-/* Shifted keymap for uppercase and symbols */
-static const char keymap_shifted[128] = {
-    0, 0, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',
-    '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',
-    0, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~',
-    0, '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0, '*',
-    0, ' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
-/* Initialize the keyboard */
-void keyboard_init(void) {
-    buffer_head = 0;
-    buffer_tail = 0;
-    shift_pressed = false;
-}
-
-/* Process a keyboard scancode */
-void keyboard_process_scancode(uint8_t scancode) {
-    /* Check if this is a key release (bit 7 set) */
-    if (scancode & 0x80) {
-        scancode &= 0x7F; /* Clear the release bit */
-        
-        /* Check if it's a shift key */
-        if (scancode == 0x2A || scancode == 0x36) { /* Left or right shift */
-            shift_pressed = false;
-        }
-    } else {
-        /* Key press */
-        /* Check for special keys first */
-        if (scancode == 0x2A || scancode == 0x36) { /* Left or right shift */
-            shift_pressed = true;
-        } else if (scancode < 128) {
-            /* Regular key, convert to ASCII */
-            char ascii;
-            if (shift_pressed) {
-                ascii = keymap_shifted[scancode];
-            } else {
-                ascii = keymap[scancode];
-            }
-            
-            /* Only add to buffer if it's a printable character */
-            if (ascii != 0) {
-                /* Add to circular buffer */
-                keyboard_buffer[buffer_head] = ascii;
-                buffer_head = (buffer_head + 1) % KEYBOARD_BUFFER_SIZE;
-                
-                /* If buffer is full, advance tail */
-                if (buffer_head == buffer_tail) {
-                    buffer_tail = (buffer_tail + 1) % KEYBOARD_BUFFER_SIZE;
-                }
-            }
-        }
-    }
-}
-
-/* Get a key from the keyboard buffer */
-char keyboard_get_key(void) {
-    /* Check if buffer is empty */
-    if (buffer_head == buffer_tail) {
-        return 0; /* No key available */
-    }
-    
-    /* Get key from buffer */
-    char key = keyboard_buffer[buffer_tail];
-    buffer_tail = (buffer_tail + 1) % KEYBOARD_BUFFER_SIZE;
-    
-    return key;
-}
-
-/* Poll the keyboard for input */
-void keyboard_poll(void) {
-    /* Check if a key is available */
-    if ((inb(KEYBOARD_STATUS_PORT) & 1) != 0) {
-        /* Read the scancode */
-        uint8_t scancode = inb(KEYBOARD_DATA_PORT);
-        keyboard_process_scancode(scancode);
-    }
-}
-
 void update_cursor(int row, int col) {
     unsigned short position = (row * VGA_WIDTH) + col;
 
@@ -235,21 +141,24 @@ void update_cursor(int row, int col) {
     outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
 }
 
+// External function from cd.c
+extern const char* fs_get_current_directory(void);
+
 // Function declarations
 void print_prompt(void) {
-    char path_buffer[FS_MAX_PATH_LENGTH];
-    
     terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
     terminal_writestring("admin@syncwideos");
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring(":");
     
     // Get the current directory path
-    fs_node_t* current_dir = fs_get_cwd();
-    fs_get_path(current_dir, path_buffer, FS_MAX_PATH_LENGTH);
-    
-    terminal_setcolor(VGA_COLOR_CYAN);
-    terminal_writestring(path_buffer);
+    if (fs_is_mounted()) {
+        terminal_setcolor(VGA_COLOR_CYAN);
+        terminal_writestring(fs_get_current_directory());
+    } else {
+        terminal_setcolor(VGA_COLOR_CYAN);
+        terminal_writestring("~");
+    }
     
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("$ ");
@@ -273,11 +182,8 @@ void process_command(const char* cmd) {
     }
     
     if (strncmp(cmd, "help", cmd_length) == 0 && cmd_length == 4) {
-        // Get the arguments (skip the command and any spaces after it)
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the help command
         cmd_help(args);
         print_prompt();
         return;
@@ -292,11 +198,8 @@ void process_command(const char* cmd) {
     
     // Check for "echo" command
     if (strncmp(cmd, "echo", cmd_length) == 0 && cmd_length == 4) {
-        // Get the arguments (skip the command and any spaces after it)
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the echo command
         cmd_echo(args);
         print_prompt();
         return;
@@ -304,75 +207,178 @@ void process_command(const char* cmd) {
     
     // Check for "system" command
     if (strncmp(cmd, "system", cmd_length) == 0 && cmd_length == 6) {
-        // Get the arguments (skip the command and any spaces after it)
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the system command
         cmd_system(args);
         print_prompt();
         return;
     }
     
-    // Check for "ls" command
+    // Filesystem commands
     if (strncmp(cmd, "ls", cmd_length) == 0 && cmd_length == 2) {
-        // Get the arguments (skip the command and any spaces after it)
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the ls command
         cmd_ls(args);
         print_prompt();
         return;
     }
     
-    // Check for "cd" command
     if (strncmp(cmd, "cd", cmd_length) == 0 && cmd_length == 2) {
-        // Get the arguments (skip the command and any spaces after it)
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the cd command
         cmd_cd(args);
         print_prompt();
         return;
     }
     
-    // Check for "mkdir" command
     if (strncmp(cmd, "mkdir", cmd_length) == 0 && cmd_length == 5) {
-        // Get the arguments (skip the command and any spaces after it)
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the mkdir command
         cmd_mkdir(args);
         print_prompt();
         return;
     }
 
     if (strncmp(cmd, "read", cmd_length) == 0 && cmd_length == 4) {
-        // Get the arguments (skip the command and any spaces after it)
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the read command
         cmd_read(args);
         print_prompt();
         return;
     }
 
-    // Check for "pia" command
-    if (strncmp(cmd, "pia", cmd_length) == 0 && cmd_length == 3) {
-        // Get the arguments (skip the command and any spaces after it)
+    // Alternative command for reading files
+    if (strncmp(cmd, "cat", cmd_length) == 0 && cmd_length == 3) {
         const char* args = cmd_end;
         while (*args == ' ') args++;
-        
-        // Call the pia command
-        cmd_pia(args);
+        cmd_read(args); // Use the same function as read
+        print_prompt();
+        return;
+    }
+
+    // Print working directory
+    if (strncmp(cmd, "pwd", cmd_length) == 0 && cmd_length == 3) {
+        cmd_pwd();
+        print_prompt();
+        return;
+    }
+
+    // Check for "mount" command
+    if (strncmp(cmd, "mount", cmd_length) == 0 && cmd_length == 5) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_mount(args);
+        print_prompt();
+        return;
+    }
+
+    // Check for "unmount" command
+    if (strncmp(cmd, "unmount", cmd_length) == 0 && cmd_length == 7) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_unmount(args);
         print_prompt();
         return;
     }
     
+    // Filesystem info command
+    if (strncmp(cmd, "fsinfo", cmd_length) == 0 && cmd_length == 6) {
+        if (!fs_is_mounted()) {
+            terminal_writestring("Filesystem not mounted\n");
+        } else {
+            terminal_writestring("FAT32 Filesystem Information:\n");
+            terminal_writestring("Status: Mounted\n");
+            
+            uint32_t total_space = fs_get_total_space();
+            uint32_t free_space = fs_get_free_space();
+            
+            terminal_writestring("Total space: ");
+            // Simple size display (you can improve this)
+            char size_str[32];
+            uint32_t mb = total_space / (1024 * 1024);
+            // Simple number to string
+            int pos = 0;
+            if (mb == 0) {
+                size_str[pos++] = '0';
+            } else {
+                char temp[16];
+                int temp_pos = 0;
+                while (mb > 0) {
+                    temp[temp_pos++] = '0' + (mb % 10);
+                    mb /= 10;
+                }
+                for (int i = temp_pos - 1; i >= 0; i--) {
+                    size_str[pos++] = temp[i];
+                }
+            }
+            size_str[pos] = '\0';
+            terminal_writestring(size_str);
+            terminal_writestring(" MB\n");
+            
+            terminal_writestring("Free space: ");
+            mb = free_space / (1024 * 1024);
+            pos = 0;
+            if (mb == 0) {
+                size_str[pos++] = '0';
+            } else {
+                char temp[16];
+                int temp_pos = 0;
+                while (mb > 0) {
+                    temp[temp_pos++] = '0' + (mb % 10);
+                    mb /= 10;
+                }
+                for (int i = temp_pos - 1; i >= 0; i--) {
+                    size_str[pos++] = temp[i];
+                }
+            }
+            size_str[pos] = '\0';
+            terminal_writestring(size_str);
+            terminal_writestring(" MB\n");
+        }
+        print_prompt();
+        return;
+    }
+
+    // Text editor command
+    if (strncmp(cmd, "pia", cmd_length) == 0 && cmd_length == 3) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_pia(args);
+        print_prompt();
+        return;
+    }
+
+    // Network commands (existing)
+    if (strncmp(cmd, "ipconfig", cmd_length) == 0 && cmd_length == 8) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_ipconfig(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "ping", cmd_length) == 0 && cmd_length == 4) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_ping(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "dhcp", cmd_length) == 0 && cmd_length == 4) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_dhcp(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "netstat", cmd_length) == 0 && cmd_length == 7) {
+        cmd_netstat("");
+        print_prompt();
+        return;
+    }
+
     // Unknown command
     terminal_writestring("Unknown command: ");
     terminal_write(cmd, cmd_length);
@@ -380,14 +386,108 @@ void process_command(const char* cmd) {
     print_prompt();
 }
 
-// Change the kernel_main function signature to accept the multiboot info pointer
+void wait(uint32_t milliseconds) {
+    // Simple CPU cycle-based delay
+    volatile uint32_t delay = milliseconds * 500000; // Adjust multiplier as needed
+    
+    for (volatile uint32_t i = 0; i < delay; i++) {
+        // Burn CPU cycles
+        __asm__ volatile ("nop");
+    }
+}
+
+// Alternative shorter delays
+void wait_short(void) {
+    for (volatile uint32_t i = 0; i < 100000; i++) {
+        __asm__ volatile ("nop");
+    }
+}
+
+void wait_long(void) {
+    for (volatile uint32_t i = 0; i < 1000000; i++) {
+        __asm__ volatile ("nop");
+    }
+}
+
 void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
     /* Store the multiboot info pointer for use by system.c */
     multiboot_info = mbd;
 
-    /* Initialize terminal interface */
     terminal_initialize();
-    /* Existing terminal output code */
+
+    // Initialize memory system first
+    terminal_writestring("Initializing Memory System...\n");
+    memory_init();
+
+    // Initialize filesystem
+    terminal_writestring("Initializing filesystem...\n");
+    fs_init();
+    
+    // Try to mount the filesystem
+    terminal_writestring("Mounting FAT32 filesystem...\n");
+    if (fs_mount()) {
+        terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
+        terminal_writestring("FAT32 filesystem mounted successfully.\n");
+        terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    } else {
+        terminal_setcolor(VGA_COLOR_BROWN);
+        terminal_writestring("Failed to mount FAT32 filesystem.\n");
+        terminal_writestring("Filesystem commands will be limited.\n");
+        terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    }
+    
+    // Initialize PCI (required for network card detection)
+    terminal_writestring("Initializing PCI...\n");
+    pci_init();
+    
+    // Initialize network
+    terminal_writestring("Initializing network...\n");
+    network_init();
+    
+    // Set default network configuration
+    terminal_writestring("Configuring network...\n");
+    network_set_ip(ip_str_to_int("192.168.1.100"));
+    network_set_gateway(ip_str_to_int("192.168.1.1"));
+    network_set_netmask(ip_str_to_int("255.255.255.0"));
+    
+    if (network_is_ready()) {
+        terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
+        terminal_writestring("Network initialized successfully.\n");
+        terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+        
+        // Show network configuration
+        terminal_writestring("IP Address: 192.168.1.100\n");
+        terminal_writestring("Gateway: 192.168.1.1\n");
+        terminal_writestring("Netmask: 255.255.255.0\n");
+    } else {
+        terminal_setcolor(VGA_COLOR_BROWN);
+        terminal_writestring("Network initialization failed (no hardware detected).\n");
+        terminal_writestring("Network commands will work in simulation mode.\n");
+        terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    }
+    
+    // Show filesystem status
+    if (fs_is_mounted()) {
+        terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
+        terminal_writestring("FAT32 filesystem ready. Use 'ls' to list files.\n");
+        terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    } else {
+        terminal_setcolor(VGA_COLOR_BROWN);
+        terminal_writestring("No filesystem mounted. Use 'mount' to mount FAT32.\n");
+        terminal_setcolor(VGA_COLOR_LIGHT_GREY);
+    }
+    
+    terminal_writestring("Type 'help' for available commands.\n\n");
+
+    terminal_writestring("\n");
+    terminal_writestring("Initializing Terminal...\n");
+
+    wait(1000000);
+    
+    terminal_writestring("\n");
+    
+    terminal_clear();
+    
     terminal_setcolor(VGA_COLOR_LIGHT_CYAN);
     terminal_writestring("------------------------------------\n");
     terminal_writestring("|      Welcome to SyncWide OS      |\n");
@@ -398,8 +498,6 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("\n");
     
-    // Initialize filesystem
-    fs_init();
     // Print initial prompt
     print_prompt();
     
@@ -409,6 +507,9 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
     // Initialize command buffer
     command_length = 0;
     current_command[0] = '\0';
+    
+    static uint32_t dhcp_tick_counter = 0;
+
     // Main input loop
     while (1) {
         // Poll keyboard for input
@@ -416,6 +517,16 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
         
         // Process any available keys
         char key = keyboard_get_key();
+
+        // Process network packets
+        network_process_packets();
+        
+        // DHCP tick (approximately every second)
+        dhcp_tick_counter++;
+        if (dhcp_tick_counter >= 100000) { // Adjust this value based on your loop speed
+            dhcp_tick();
+            dhcp_tick_counter = 0;
+        }
         
         if (key != 0) {
             // Handle special keys or control characters
