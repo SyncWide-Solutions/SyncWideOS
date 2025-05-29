@@ -95,28 +95,83 @@ void terminal_putentryat(char c, uint8_t color, size_t x, size_t y)
     terminal_buffer[index] = vga_entry(c, color);
 }
 
+void terminal_scroll(void) {
+    // Move all lines up by one
+    for (size_t y = 0; y < VGA_HEIGHT - 1; y++) {
+        for (size_t x = 0; x < VGA_WIDTH; x++) {
+            size_t current_index = y * VGA_WIDTH + x;
+            size_t next_index = (y + 1) * VGA_WIDTH + x;
+            terminal_buffer[current_index] = terminal_buffer[next_index];
+        }
+    }
+    
+    // Clear the last line
+    for (size_t x = 0; x < VGA_WIDTH; x++) {
+        size_t index = (VGA_HEIGHT - 1) * VGA_WIDTH + x;
+        terminal_buffer[index] = vga_entry(' ', terminal_color);
+    }
+    
+    // Move cursor to the beginning of the last line
+    terminal_row = VGA_HEIGHT - 1;
+    terminal_column = 0;
+    
+    // Update the hardware cursor position
+    update_cursor(terminal_row, terminal_column);
+}
+
+// Add this helper function before kernel_main()
+void terminal_backspace(void) {
+    if (terminal_column > 0) {
+        // Normal backspace within the same line
+        terminal_column--;
+        terminal_putentryat(' ', terminal_color, terminal_column, terminal_row);
+    } else if (terminal_row > 0) {
+        // Backspace at beginning of line - go to end of previous line
+        terminal_row--;
+        
+        // Find the last non-space character on the previous line
+        terminal_column = VGA_WIDTH - 1;
+        while (terminal_column > 0) {
+            size_t index = terminal_row * VGA_WIDTH + terminal_column;
+            uint16_t entry = terminal_buffer[index];
+            char ch = (char)(entry & 0xFF);
+            if (ch != ' ') {
+                break;
+            }
+            terminal_column--;
+        }
+        
+        // Clear the character at this position
+        terminal_putentryat(' ', terminal_color, terminal_column, terminal_row);
+    }
+    update_cursor(terminal_row, terminal_column);
+}
+
 void terminal_putchar(char c) {
     if (c == '\n') {
         terminal_column = 0;
-        if (++terminal_row == VGA_HEIGHT)
-            terminal_row = 0;
+        terminal_row++;
+        if (terminal_row >= VGA_HEIGHT) {
+            terminal_scroll();
+        }
+        update_cursor(terminal_row, terminal_column);
         return;
     }
     
-    if (c == '\b') {  // Backspace handling
-        if (terminal_column > 0) {
-            terminal_column--;
-            terminal_putentryat(' ', terminal_color, terminal_column, terminal_row);
-        }
+    if (c == '\b') {
+        terminal_backspace();
         return;
     }
 
     terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
     if (++terminal_column == VGA_WIDTH) {
         terminal_column = 0;
-        if (++terminal_row == VGA_HEIGHT)
-            terminal_row = 0;
+        terminal_row++;
+        if (terminal_row >= VGA_HEIGHT) {
+            terminal_scroll();
+        }
     }
+    update_cursor(terminal_row, terminal_column);
 }
 
 void terminal_write(const char* data, size_t size) 
@@ -419,6 +474,9 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
     terminal_writestring("Initializing Memory System...\n");
     memory_init();
 
+    terminal_writestring("Initializing disk subsystem...\n");
+    disk_init();
+
     // Initialize filesystem
     terminal_writestring("Initializing filesystem...\n");
     fs_init();
@@ -493,7 +551,7 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
     terminal_writestring("|      Welcome to SyncWide OS      |\n");
     terminal_writestring("|       https://os.syncwi.de       |\n");
     terminal_writestring("|                                  |\n");
-    terminal_writestring("|         Version: 0.6.0gb         |\n");
+    terminal_writestring("|         Version: 0.6.8gb         |\n");
     terminal_writestring("------------------------------------\n");
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("\n");
@@ -542,12 +600,10 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
             }
             else if (key == '\b') {
                 // Backspace key pressed
-                if (command_length > 0 && terminal_column > 0) {
+                if (command_length > 0) {
                     command_length--;
                     current_command[command_length] = '\0';
-                    terminal_column--;
-                    terminal_putentryat(' ', terminal_color, terminal_column, terminal_row);
-                    update_cursor(terminal_row, terminal_column);
+                    terminal_backspace();
                 }
             }
             else {

@@ -52,8 +52,20 @@ for file in iso_files/*; do
     if [ -f "$file" ]; then
         echo "static const char file_${file_index}_content[] = {" >> src/generated/iso_files_data.c
         
-        # Convert file content to C array
-        hexdump -v -e '16/1 "0x%02x, " "\n"' "$file" >> src/generated/iso_files_data.c
+        # Convert file content to C array using od
+        od -t x1 -An "$file" | \
+        sed 's/^ *//' | \
+        sed 's/ *$//' | \
+        sed 's/ /\n/g' | \
+        grep -v '^$' | \
+        sed 's/^/0x/' | \
+        sed 's/$/,/' | \
+        awk '{
+            if (NR % 16 == 1) printf "\n"
+            printf "%s ", $0
+        }
+        END { printf "\n" }' >> src/generated/iso_files_data.c
+        
         echo "0x00};" >> src/generated/iso_files_data.c
         echo "" >> src/generated/iso_files_data.c
         

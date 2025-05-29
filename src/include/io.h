@@ -34,4 +34,29 @@ static inline uint32_t inl(uint16_t port) {
     return ret;
 }
 
-#endif /* IO_H */
+// Memory-mapped I/O functions
+static inline void mmio_write8(uint32_t addr, uint8_t val) {
+    *(volatile uint8_t*)addr = val;
+}
+
+static inline uint8_t mmio_read8(uint32_t addr) {
+    return *(volatile uint8_t*)addr;
+}
+
+static inline void mmio_write16(uint32_t addr, uint16_t val) {
+    *(volatile uint16_t*)addr = val;
+}
+
+static inline uint16_t mmio_read16(uint32_t addr) {
+    return *(volatile uint16_t*)addr;
+}
+
+static inline void mmio_write32(uint32_t addr, uint32_t val) {
+    *(volatile uint32_t*)addr = val;
+}
+
+static inline uint32_t mmio_read32(uint32_t addr) {
+    return *(volatile uint32_t*)addr;
+}
+
+#endif // IO_H

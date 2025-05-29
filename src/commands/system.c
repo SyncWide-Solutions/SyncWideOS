@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include "../include/string.h"
 #include "../include/io.h"
+#include "../include/disk.h"
+#include "../include/gpu.h"
 
 // External function declarations
 extern void terminal_writestring(const char* data);
@@ -652,31 +654,276 @@ static void system_info_boot(void) {
     }
 }
 
-// Disk information
+// Disk Information
 static void system_info_disk(void) {
     terminal_writestring("Disk Information:\n");
     
+    // Initialize disk subsystem if not already done
+    static int disk_initialized = 0;
+    if (!disk_initialized) {
+        terminal_writestring("  Initializing disk subsystem...\n");
+        disk_init();
+        disk_initialized = 1;
+    }
+    
+    // Get number of detected drives
+    int drive_count = disk_get_drive_count();
+    char buffer[32];
+    
+    terminal_writestring("  Detected drives: ");
+    itoa(drive_count, buffer, 10);
+    terminal_writestring(buffer);
+    terminal_writestring("\n");
+    
+    if (drive_count == 0) {
+        terminal_writestring("  No drives detected.\n");
+        terminal_writestring("  This could be due to:\n");
+        terminal_writestring("    - No physical drives connected\n");
+        terminal_writestring("    - Drives not compatible with ATA/IDE interface\n");
+        terminal_writestring("    - Hardware initialization issues\n");
+        return;
+    }
+    
+    terminal_writestring("\n");
+    
+    // Print detailed information for each drive
+    for (int i = 0; i < 4; i++) {
+        ide_device_t* drive = disk_get_drive_info(i);
+        if (drive != NULL) {
+            disk_print_drive_info(i);
+            terminal_writestring("\n");
+        }
+    }
+    
+    // Legacy multiboot disk information (if available)
     if (multiboot_info && (multiboot_info->flags & MULTIBOOT_FLAG_DRIVES)) {
-        char buffer[32];
-        
-        terminal_writestring("  Drives information available from multiboot\n");
-        terminal_writestring("  Drives data at address: 0x");
+        terminal_writestring("  Additional multiboot drive information:\n");
+        terminal_writestring("    Drives data at address: 0x");
         itoa(multiboot_info->drives_addr, buffer, 16);
         terminal_writestring(buffer);
         terminal_writestring("\n");
         
-        terminal_writestring("  Drives data length: ");
+        terminal_writestring("    Drives data length: ");
         itoa(multiboot_info->drives_length, buffer, 10);
         terminal_writestring(buffer);
         terminal_writestring(" bytes\n");
-        
-        // Note: Detailed drive parsing would require knowledge of the
-        // specific drive structure format used by the bootloader
-    } else {
-        terminal_writestring("  Disk information not available from multiboot\n");
-        terminal_writestring("  For detailed disk access, hardware drivers would be needed\n");
     }
+    
+    // Show IDE controller information
+    terminal_writestring("  IDE Controller Information:\n");
+    terminal_writestring("    Primary channel: I/O 0x1F0-0x1F7, Control 0x3F6\n");
+    terminal_writestring("    Secondary channel: I/O 0x170-0x177, Control 0x376\n");
+    terminal_writestring("    Supports: ATA/ATAPI devices, PIO mode\n");
+    terminal_writestring("    Note: DMA mode not implemented\n");
 }
+
+// GPU information
+static void system_info_gpu(void) {
+    terminal_writestring("GPU Information:\n");
+    
+    // Initialize GPU subsystem if not already done
+    gpu_init();
+    
+    int gpu_count = gpu_get_device_count();
+    
+    if (gpu_count == 0) {
+        terminal_writestring("  No GPU devices detected\n");
+        terminal_writestring("  Note: This may indicate:\n");
+        terminal_writestring("    - No graphics hardware present\n");
+        terminal_writestring("    - Graphics hardware not PCI-based\n");
+        terminal_writestring("    - Driver detection issues\n");
+        return;
+    }
+    
+    char buffer[32];
+    terminal_writestring("  Total GPU devices found: ");
+    itoa(gpu_count, buffer, 10);
+    terminal_writestring(buffer);
+    terminal_writestring("\n\n");
+    
+    // Display information for each GPU
+    for (int i = 0; i < gpu_count; i++) {
+        gpu_device_t* gpu = gpu_get_device_info(i);
+        if (gpu && gpu->present) {
+            terminal_writestring("GPU ");
+            itoa(i, buffer, 10);
+            terminal_writestring(buffer);
+            if (gpu->primary) {
+                terminal_writestring(" (Primary Display Adapter)");
+            }
+            terminal_writestring(":\n");
+            
+            // Basic information
+            terminal_writestring("  Vendor: ");
+            terminal_writestring(gpu->vendor_name);
+            terminal_writestring("\n");
+            
+            terminal_writestring("  Device: ");
+            terminal_writestring(gpu->device_name);
+            terminal_writestring("\n");
+            
+            terminal_writestring("  Type: ");
+            switch (gpu->gpu_type) {
+                case GPU_TYPE_VGA:
+                    terminal_writestring("VGA Compatible Controller");
+                    break;
+                case GPU_TYPE_SVGA:
+                    terminal_writestring("Super VGA Controller");
+                    break;
+                case GPU_TYPE_ACCELERATED:
+                    terminal_writestring("Hardware Accelerated Graphics");
+                    break;
+                case GPU_TYPE_INTEGRATED:
+                    terminal_writestring("Integrated Graphics Processor");
+                    break;
+                case GPU_TYPE_DISCRETE:
+                    terminal_writestring("Discrete Graphics Card");
+                    break;
+                case GPU_TYPE_VIRTUAL:
+                    terminal_writestring("Virtual Graphics Adapter");
+                    break;
+                default:
+                    terminal_writestring("Unknown Graphics Device");
+                    break;
+            }
+            terminal_writestring("\n");
+            
+            // Memory information
+            terminal_writestring("  Video Memory: ");
+            if (gpu->memory_size >= 1024) {
+                itoa(gpu->memory_size / 1024, buffer, 10);
+                terminal_writestring(buffer);
+                terminal_writestring(" GB");
+            } else {
+                itoa(gpu->memory_size, buffer, 10);
+                terminal_writestring(buffer);
+                terminal_writestring(" MB");
+            }
+            
+            terminal_writestring(" (");
+            switch (gpu->memory_type) {
+                case GPU_MEM_SHARED:
+                    terminal_writestring("Shared System Memory");
+                    break;
+                case GPU_MEM_DEDICATED:
+                    terminal_writestring("Dedicated Video Memory");
+                    break;
+                case GPU_MEM_UNIFIED:
+                    terminal_writestring("Unified Memory Architecture");
+                    break;
+                default:
+                    terminal_writestring("Unknown Memory Type");
+                    break;
+            }
+            terminal_writestring(")\n");
+            
+            // Current display mode
+            terminal_writestring("  Current Display Mode: ");
+            itoa(gpu->current_width, buffer, 10);
+            terminal_writestring(buffer);
+            terminal_writestring("x");
+            itoa(gpu->current_height, buffer, 10);
+            terminal_writestring(buffer);
+            
+            if (gpu->current_bpp <= 8) {
+                terminal_writestring(" (");
+                itoa(gpu->current_bpp, buffer, 10);
+                terminal_writestring(buffer);
+                terminal_writestring("-bit color)");
+            } else {
+                terminal_writestring("x");
+                itoa(gpu->current_bpp, buffer, 10);
+                terminal_writestring(buffer);
+                terminal_writestring("-bit");
+            }
+            
+            terminal_writestring(" @ ");
+            itoa(gpu->current_refresh, buffer, 10);
+            terminal_writestring(buffer);
+            terminal_writestring("Hz\n");
+            
+            // Hardware capabilities
+            terminal_writestring("  Hardware Features: ");
+            if (gpu->capabilities & GPU_CAP_2D) terminal_writestring("2D ");
+            if (gpu->capabilities & GPU_CAP_3D) terminal_writestring("3D ");
+            if (gpu->capabilities & GPU_CAP_HARDWARE_ACCEL) terminal_writestring("Hardware-Acceleration ");
+            if (gpu->capabilities & GPU_CAP_SHADER) terminal_writestring("Programmable-Shaders ");
+            terminal_writestring("\n");
+            
+            // API support
+            terminal_writestring("  Graphics APIs: ");
+            if (gpu->capabilities & GPU_CAP_DIRECTX) terminal_writestring("DirectX ");
+            if (gpu->capabilities & GPU_CAP_OPENGL) terminal_writestring("OpenGL ");
+            if (gpu->capabilities & GPU_CAP_VULKAN) terminal_writestring("Vulkan ");
+            if (gpu->capabilities & GPU_CAP_COMPUTE) terminal_writestring("Compute-Shaders ");
+            terminal_writestring("\n");
+            
+            // Video capabilities
+            terminal_writestring("  Video Features: ");
+            if (gpu->capabilities & GPU_CAP_VIDEO_DECODE) terminal_writestring("Hardware-Decode ");
+            if (gpu->capabilities & GPU_CAP_VIDEO_ENCODE) terminal_writestring("Hardware-Encode ");
+            if (!(gpu->capabilities & (GPU_CAP_VIDEO_DECODE | GPU_CAP_VIDEO_ENCODE))) {
+                terminal_writestring("Software-Only ");
+            }
+            terminal_writestring("\n");
+            
+            // Display connectivity
+            terminal_writestring("  Display Outputs: ");
+            if (gpu->capabilities & GPU_CAP_VGA_COMPAT) terminal_writestring("VGA ");
+            if (gpu->capabilities & GPU_CAP_HDMI) terminal_writestring("HDMI ");
+            if (gpu->capabilities & GPU_CAP_DISPLAYPORT) terminal_writestring("DisplayPort ");
+            if (gpu->capabilities & GPU_CAP_MULTI_MONITOR) terminal_writestring("Multi-Monitor ");
+            terminal_writestring("\n");
+            
+            // Device IDs
+            terminal_writestring("  Device IDs: Vendor=0x");
+            itoa(gpu->vendor_id, buffer, 16);
+            terminal_writestring(buffer);
+            terminal_writestring(", Device=0x");
+            itoa(gpu->device_id, buffer, 16);
+            terminal_writestring(buffer);
+            terminal_writestring(", Revision=0x");
+            itoa(gpu->revision, buffer, 16);
+            terminal_writestring(buffer);
+            terminal_writestring("\n");
+            
+            // Driver information
+            terminal_writestring("  Driver Version: ");
+            terminal_writestring(gpu->driver_version);
+            terminal_writestring(" (SyncWideOS Generic Driver)\n");
+            
+            if (i < gpu_count - 1) {
+                terminal_writestring("\n");
+            }
+        }
+    }
+    
+    // Additional system graphics information
+    terminal_writestring("\nGraphics System Status:\n");
+    terminal_writestring("  VGA Text Mode: Active (80x25)\n");
+    terminal_writestring("  Graphics Mode: Not Active\n");
+    terminal_writestring("  Hardware Acceleration: ");
+    
+    // Check if any GPU supports hardware acceleration
+    int has_hw_accel = 0;
+    for (int i = 0; i < gpu_count; i++) {
+        gpu_device_t* gpu = gpu_get_device_info(i);
+        if (gpu && (gpu->capabilities & GPU_CAP_HARDWARE_ACCEL)) {
+            has_hw_accel = 1;
+            break;
+        }
+    }
+    
+    if (has_hw_accel) {
+        terminal_writestring("Available (Not Initialized)\n");
+    } else {
+        terminal_writestring("Not Available\n");
+    }
+    
+    terminal_writestring("  Frame Buffer: VGA Compatible (0xB8000)\n");
+    terminal_writestring("  Color Depth: 4-bit (16 colors)\n");
+}
+
 
 // System information handler
 static void system_info(const char* args) {
@@ -685,11 +932,12 @@ static void system_info(const char* args) {
     
     // Check for empty arguments or "usage" command
     if (*args == '\0' || strncmp(args, "usage", 5) == 0) {
-        terminal_writestring("Usage: system info [cpu|memory|boot|disk|all]\n");
+        terminal_writestring("Usage: system info [cpu|memory|boot|disk|gpu|all]\n");
         terminal_writestring("  cpu    - Display CPU information\n");
         terminal_writestring("  memory - Display memory information\n");
         terminal_writestring("  boot   - Display boot information\n");
         terminal_writestring("  disk   - Display disk information\n");
+        terminal_writestring("  gpu    - Display GPU information\n");
         terminal_writestring("  all    - Display all system information\n");
         return;
     }
@@ -715,6 +963,11 @@ static void system_info(const char* args) {
         return;
     }
     
+    if (strncmp(args, "gpu", 3) == 0) {
+        system_info_gpu();
+        return;
+    }
+    
     if (strncmp(args, "all", 3) == 0) {
         system_info_cpu();
         terminal_writestring("\n");
@@ -723,6 +976,8 @@ static void system_info(const char* args) {
         system_info_boot();
         terminal_writestring("\n");
         system_info_disk();
+        terminal_writestring("\n");
+        system_info_gpu();
         return;
     }
     

@@ -1,8 +1,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "../include/pci.h"
 #include "../include/io.h"
+#include "../include/pci.h"
 #include "../include/rtl8139.h"
 #include "../include/string.h"
 
