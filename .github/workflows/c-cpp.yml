@@ -12,65 +12,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-        - uses: ilammy/setup-nasm@v1.5.2
         - uses: actions/checkout@v4
+        - uses: ilammy/setup-nasm@v1.5.2
 
         - name: Update Ubuntu
           run: sudo apt update
         
         - name: Install pre-dependencies
-          run: sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo
+          run: sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo genisoimage
 
         - name: Get Binutils
           run: wget https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.gz
         
         - name: Unpack Binutils
-          run: tar -xvzf binutils-2.42.tar.gz
+          run: tar -xzf binutils-2.42.tar.gz
         
-        - name: Create a directory for Binutils
-          run: mkdir build-binutils
-        
-        - name: Enter then directory for Binutils
-          run: cd build-binutils
-
-        - name: Build Binutils
-          run: ../binutils-2.42/configure --target=i686-elf --prefix="$HOME/opt/cross" --with-sysroot --disable-nls --disable-werror | make | make install | cd ..
+        - name: Create and build Binutils
+          run: |
+            mkdir build-binutils
+            cd build-binutils
+            ../binutils-2.42/configure --target=i686-elf --prefix="$HOME/opt/cross" --with-sysroot --disable-nls --disable-werror
+            make -j$(nproc)
+            make install
 
         - name: Get GCC
           run: wget https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz
 
         - name: Unpack GCC
-          run: tar -xvzf gcc-13.2.0.tar.gz
+          run: tar -xzf gcc-13.2.0.tar.gz
         
         - name: Download prerequisites for GCC
-          run: cd gcc-13.2.0 && ./contrib/download_prerequisites        
-        
-        - name: Exit GCC directory
-          run: cd ..
-        
-        - name: Create a dirctory to Build GCC
-          run: mkdir build-gcc
-
-        - name: Enter the directory for GCC
-          run: cd build-gcc
-        
-        - name: Build GCC and install
           run: |
+            cd gcc-13.2.0
+            ./contrib/download_prerequisites        
+        
+        - name: Create and build GCC
+          run: |
+            mkdir build-gcc
             cd build-gcc
             ../gcc-13.2.0/configure --target=i686-elf --prefix="$HOME/opt/cross" --disable-nls --enable-languages=c,c++ --without-headers
-            make all-gcc
-            make all-target-libgcc
+            make all-gcc -j$(nproc)
+            make all-target-libgcc -j$(nproc)
             make install-gcc
             make install-target-libgcc
           
         - name: Add GCC to Path
-          run: export PATH="$HOME/opt/cross/bin:$PATH" && source ~/.bashrc
+          run: echo "$HOME/opt/cross/bin" >> $GITHUB_PATH
         
         - name: Test GCC
-          run: i686-elf-as --version
+          run: i686-elf-gcc --version
 
-        - name: make clean
-          run: make clean
+        - name: Create build directories
+          run: |
+            mkdir -p build/commands
+            mkdir -p build/drivers
+            mkdir -p build/kernel
+            mkdir -p build/bootloader
+            mkdir -p build/generated
     
-        - name: make
+        - name: Build SyncWideOS
           run: make
