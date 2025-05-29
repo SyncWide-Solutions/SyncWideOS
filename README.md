@@ -1,5 +1,5 @@
 # SyncWide OS
-## Version: 0.6.0gb (Grub Beta)
+## Version: 0.6.8gb (Grub Beta)
 > Don't look at the Tests, these will fail (Servers too bad)
 
 **NOTE:** This System is not Linux based, eventhough the command names are similar.
