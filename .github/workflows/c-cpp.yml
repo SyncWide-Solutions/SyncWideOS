@@ -19,7 +19,7 @@ jobs:
           run: sudo apt update
         
         - name: Install pre-dependencies
-          run: sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo genisoimage
+          run: sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo genisoimage grub-pc-bin grub-common xorriso mtools
 
         - name: Get Binutils
           run: wget https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.gz
@@ -72,3 +72,9 @@ jobs:
     
         - name: Build SyncWideOS
           run: make
+
+        - name: Upload ISO artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: SyncWideOS-ISO
+            path: build/SyncWideOS.iso
