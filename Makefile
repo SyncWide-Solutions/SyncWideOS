@@ -4,7 +4,7 @@ AS = i686-elf-as
 LD = i686-elf-gcc
 
 # Compiler flags
-CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Isrc/include -Isrc/micropython
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Isrc/include
 LDFLAGS = -T src/linker.ld -ffreestanding -O2 -nostdlib -lgcc
 
 # Directories
@@ -14,50 +14,20 @@ BOOTDIR = $(BUILDDIR)/bootloader
 KERNELDIR = $(BUILDDIR)/kernel
 DRIVERSDIR = $(BUILDDIR)/drivers
 COMMANDSDIR = $(BUILDDIR)/commands
-MICROPYTHONDIR = $(BUILDDIR)/micropython
-
 # Source files
 BOOT_SOURCES = $(wildcard $(SRCDIR)/bootloader/*.s)
 KERNEL_SOURCES = $(wildcard $(SRCDIR)/kernel/*.c)
 DRIVER_SOURCES = $(wildcard $(SRCDIR)/drivers/*.c)
 COMMAND_SOURCES = $(wildcard $(SRCDIR)/commands/*.c)
 
-# MicroPython core sources (minimal set)
-MICROPYTHON_SOURCES = \
-    $(SRCDIR)/micropython/py/gc.c \
-    $(SRCDIR)/micropython/py/malloc.c \
-    $(SRCDIR)/micropython/py/runtime.c \
-    $(SRCDIR)/micropython/py/compile.c \
-    $(SRCDIR)/micropython/py/parse.c \
-    $(SRCDIR)/micropython/py/lexer.c \
-    $(SRCDIR)/micropython/py/obj.c \
-    $(SRCDIR)/micropython/py/objstr.c \
-    $(SRCDIR)/micropython/py/objint.c \
-    $(SRCDIR)/micropython/py/objlist.c \
-    $(SRCDIR)/micropython/py/objdict.c \
-    $(SRCDIR)/micropython/py/objfun.c \
-    $(SRCDIR)/micropython/py/objmodule.c \
-    $(SRCDIR)/micropython/py/objtype.c \
-    $(SRCDIR)/micropython/py/builtin.c \
-    $(SRCDIR)/micropython/py/builtinimport.c \
-    $(SRCDIR)/micropython/py/vm.c \
-    $(SRCDIR)/micropython/py/nlr.c \
-    $(SRCDIR)/micropython/py/qstr.c \
-    $(SRCDIR)/micropython/py/vstr.c \
-    $(SRCDIR)/micropython/py/unicode.c \
-    $(SRCDIR)/micropython/py/mpprint.c \
-    $(SRCDIR)/micropython/py/repl.c \
-    $(SRCDIR)/micropython/ports/syncwideos/main.c
-
 # Object files (continued)
 BOOT_OBJECTS = $(BOOT_SOURCES:$(SRCDIR)/bootloader/%.s=$(BOOTDIR)/%.o)
 KERNEL_OBJECTS = $(KERNEL_SOURCES:$(SRCDIR)/kernel/%.c=$(KERNELDIR)/%.o)
 DRIVER_OBJECTS = $(DRIVER_SOURCES:$(SRCDIR)/drivers/%.c=$(DRIVERSDIR)/%.o)
 COMMAND_OBJECTS = $(COMMAND_SOURCES:$(SRCDIR)/commands/%.c=$(COMMANDSDIR)/%.o)
-MICROPYTHON_OBJECTS = $(MICROPYTHON_SOURCES:$(SRCDIR)/micropython/%.c=$(MICROPYTHONDIR)/%.o)
 
 # All object files
-OBJECTS = $(COMMAND_OBJECTS) $(DRIVER_OBJECTS) $(KERNEL_OBJECTS) $(BOOT_OBJECTS) $(MICROPYTHON_OBJECTS)
+OBJECTS = $(COMMAND_OBJECTS) $(DRIVER_OBJECTS) $(KERNEL_OBJECTS) $(BOOT_OBJECTS)
 
 # Targets
 TARGET = $(BUILDDIR)/SyncWideOS.bin
@@ -71,11 +41,7 @@ all: $(ISO_TARGET)
 dd: $(IMG_TARGET)
 
 # Create directories
-$(BOOTDIR) $(KERNELDIR) $(DRIVERSDIR) $(COMMANDSDIR) $(MICROPYTHONDIR):
-	mkdir -p $@
-
-# Create nested MicroPython directories
-$(MICROPYTHONDIR)/py $(MICROPYTHONDIR)/ports/syncwideos:
+$(BOOTDIR) $(KERNELDIR) $(DRIVERSDIR) $(COMMANDSDIR):
 	mkdir -p $@
 
 # Compile bootloader assembly files
@@ -94,14 +60,6 @@ $(DRIVERSDIR)/%.o: $(SRCDIR)/drivers/%.c | $(DRIVERSDIR)
 $(COMMANDSDIR)/%.o: $(SRCDIR)/commands/%.c | $(COMMANDSDIR)
 	$(CC) -c $< -o $@ $(CFLAGS)
 
-# Compile MicroPython py files
-$(MICROPYTHONDIR)/py/%.o: $(SRCDIR)/micropython/py/%.c | $(MICROPYTHONDIR)/py
-	$(CC) -c $< -o $@ $(CFLAGS) -DMICROPY_QSTR_EXTRA_POOL=mp_qstr_frozen_const_pool
-
-# Compile MicroPython port files
-$(MICROPYTHONDIR)/ports/syncwideos/%.o: $(SRCDIR)/micropython/ports/syncwideos/%.c | $(MICROPYTHONDIR)/ports/syncwideos
-	$(CC) -c $< -o $@ $(CFLAGS) -DMICROPY_QSTR_EXTRA_POOL=mp_qstr_frozen_const_pool
-
 # Generate file data from iso_files
 src/generated/iso_files_data.c: scripts/generate_files.sh
 	@echo "Generating file data from iso_files..."
@@ -114,16 +72,8 @@ build/generated/iso_files_data.o: src/generated/iso_files_data.c
 	@mkdir -p build/generated
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Generate qstr definitions for MicroPython
-src/micropython/py/qstrdefs.generated.h: $(MICROPYTHON_SOURCES)
-	@echo "Generating MicroPython qstr definitions..."
-	@mkdir -p src/micropython/py
-	@echo "// Auto-generated qstr definitions" > $@
-	@echo "#define MICROPY_QSTR_EXTRA_POOL mp_qstr_frozen_const_pool" >> $@
-	@echo "extern const qstr_pool_t mp_qstr_frozen_const_pool;" >> $@
-
 # Link kernel binary
-$(TARGET): $(OBJECTS) $(GENERATED_OBJECTS) src/micropython/py/qstrdefs.generated.h
+$(TARGET): $(OBJECTS) $(GENERATED_OBJECTS)
 	$(LD) $(LDFLAGS) -o $@ $(OBJECTS) $(GENERATED_OBJECTS)
 
 # Create GRUB config if it doesn't exist
@@ -187,7 +137,6 @@ clean:
 	rm -rf build/
 	rm -rf isodir/
 	rm -f src/generated/iso_files_data.c
-	rm -f src/micropython/py/qstrdefs.generated.h
 
 # Help target
 help:
