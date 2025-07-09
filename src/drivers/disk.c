@@ -584,6 +584,51 @@ uint8_t ide_write_sectors(uint8_t drive, uint8_t numsects, uint32_t lba, uint16_
     return 0; // Easy, isn't it?
 }
 
+int disk_flush_cache(int drive_index) {
+    if (drive_index < 0 || drive_index >= 4) {
+        return -1; // Invalid drive index
+    }
+    
+    ide_device_t* drive = &ide_devices[drive_index];
+    
+    if (!drive->reserved) {
+        return -1; // Drive not present
+    }
+    
+    // Only flush cache for ATA drives
+    if (drive->type != IDE_ATA) {
+        return 0; // ATAPI drives don't need cache flush
+    }
+    
+    // Get the correct channel base address using your existing constants
+    uint16_t base;
+    if (drive->channel == ATA_PRIMARY) {
+        base = 0x1F0; // Primary ATA channel base
+    } else {
+        base = 0x170; // Secondary ATA channel base
+    }
+    
+    // Select the drive
+    outb(base + ATA_REG_HDDEVSEL, 0xA0 | (drive->drive << 4));
+    
+    // Wait for drive to be ready
+    while (inb(base + ATA_REG_STATUS) & ATA_SR_BSY);
+    
+    // Send FLUSH CACHE command (0xE7)
+    outb(base + ATA_REG_COMMAND, 0xE7);
+    
+    // Wait for command completion
+    while (inb(base + ATA_REG_STATUS) & ATA_SR_BSY);
+    
+    // Check for errors
+    uint8_t status = inb(base + ATA_REG_STATUS);
+    if (status & ATA_SR_ERR) {
+        return -1; // Error occurred
+    }
+    
+    return 0; // Success
+}
+
 // IRQ handlers
 void ide_wait_irq(void) {
     while (!ide_irq_invoked)

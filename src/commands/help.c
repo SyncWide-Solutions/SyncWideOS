@@ -82,6 +82,10 @@ void cmd_help(const char* args) {
             terminal_writestring("netstat - Display network status\n");
             terminal_writestring("Usage: netstat\n");
         }
+        else if (strcmp(args, "install") == 0) {
+            terminal_writestring("install - install the OS on the Hard Drive\n");
+            terminal_writestring("Usage: install [start]\n");
+        }
         else {
             terminal_writestring("Unknown command: ");
             terminal_writestring(args);
@@ -99,6 +103,7 @@ void cmd_help(const char* args) {
         terminal_writestring("  clear           - Clear the screen\n");
         terminal_writestring("  echo <text>     - Display text\n");
         terminal_writestring("  system [info]   - Show system information\n\n");
+        terminal_writestring("  install        - Install SyncWide OS to hard drive\n");
         
         terminal_writestring("Filesystem Commands:\n");
         terminal_writestring("  ls [path]       - List directory contents\n");

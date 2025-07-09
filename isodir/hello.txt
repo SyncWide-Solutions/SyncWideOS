@@ -1,3 +1,0 @@
-Hello from SyncWideOS!
-This file was added via iso_files directory.
-Testing the FAT32 filesystem implementation.

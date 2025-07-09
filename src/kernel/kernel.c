@@ -427,6 +427,14 @@ void process_command(const char* cmd) {
         print_prompt();
         return;
     }
+    
+    if (strncmp(cmd, "install", cmd_length) == 0 && cmd_length == 7) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_install(args);
+        print_prompt();
+        return;
+    }
 
     if (strncmp(cmd, "netstat", cmd_length) == 0 && cmd_length == 7) {
         cmd_netstat("");
@@ -551,7 +559,7 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
     terminal_writestring("|      Welcome to SyncWide OS      |\n");
     terminal_writestring("|       https://os.syncwi.de       |\n");
     terminal_writestring("|                                  |\n");
-    terminal_writestring("|         Version: 0.6.8gb         |\n");
+    terminal_writestring("|         Version: 0.7.1b          |\n");
     terminal_writestring("------------------------------------\n");
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("\n");

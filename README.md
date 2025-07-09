@@ -1,5 +1,5 @@
 # SyncWide OS
-## Version: 0.6.8gb (Grub Beta)
+## Version: 0.7.1b (Grub Beta)
 
 **NOTE:** This System is not Linux based, eventhough the command names are similar.
 

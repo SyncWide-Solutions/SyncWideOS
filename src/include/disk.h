@@ -125,5 +125,6 @@ void disk_detect_drives(void);
 int disk_get_drive_count(void);
 ide_device_t* disk_get_drive_info(int drive_index);
 void disk_print_drive_info(int drive_index);
+int disk_flush_cache(int drive_index);
 
 #endif
