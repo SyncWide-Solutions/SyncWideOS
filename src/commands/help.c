@@ -1,130 +1,110 @@
-#include "../include/commands.h"
-#include "../include/string.h"  // Add this include
-#include "../include/vga.h"     // Add this include
-
-extern void terminal_writestring(const char* data);
-extern void terminal_setcolor(uint8_t color);
-
 void cmd_help(const char* args) {
-    // Skip leading spaces
-    while (args && *args == ' ') args++;
-    
-    if (args && *args) {
-        // Help for specific command
-        if (strcmp(args, "echo") == 0) {
-            terminal_writestring("echo - Display text\n");
-            terminal_writestring("Usage: echo <text>\n");
-            terminal_writestring("Example: echo Hello World\n");
-        }
-        else if (strcmp(args, "clear") == 0) {
-            terminal_writestring("clear - Clear the terminal screen\n");
-            terminal_writestring("Usage: clear\n");
-        }
-        else if (strcmp(args, "system") == 0) {
-            terminal_writestring("system - Display system information\n");
-            terminal_writestring("Usage: system [info|memory|cpu]\n");
-        }
-        else if (strcmp(args, "ls") == 0) {
-            terminal_writestring("ls - List directory contents\n");
-            terminal_writestring("Usage: ls [directory]\n");
-            terminal_writestring("Example: ls /\n");
-        }
-        else if (strcmp(args, "cd") == 0) {
-            terminal_writestring("cd - Change directory\n");
-            terminal_writestring("Usage: cd <directory>\n");
-            terminal_writestring("Example: cd /home\n");
-        }
-        else if (strcmp(args, "mkdir") == 0) {
-            terminal_writestring("mkdir - Create directory\n");
-            terminal_writestring("Usage: mkdir <directory_name>\n");
-            terminal_writestring("Example: mkdir test_dir\n");
-        }
-        else if (strcmp(args, "read") == 0 || strcmp(args, "cat") == 0) {
-            terminal_writestring("read/cat - Display file contents\n");
-            terminal_writestring("Usage: read <filename>\n");
-            terminal_writestring("Example: read test.txt\n");
-        }
-        else if (strcmp(args, "pwd") == 0) {
-            terminal_writestring("pwd - Print working directory\n");
-            terminal_writestring("Usage: pwd\n");
-        }
-        else if (strcmp(args, "mount") == 0) {
-            terminal_writestring("mount - Mount FAT32 filesystem\n");
-            terminal_writestring("Usage: mount\n");
-        }
-        else if (strcmp(args, "umount") == 0) {
-            terminal_writestring("umount - Unmount filesystem\n");
-            terminal_writestring("Usage: umount\n");
-        }
-        else if (strcmp(args, "fsinfo") == 0) {
-            terminal_writestring("fsinfo - Display filesystem information\n");
-            terminal_writestring("Usage: fsinfo\n");
-        }
-        else if (strcmp(args, "pia") == 0) {
-            terminal_writestring("pia - Text editor\n");
-            terminal_writestring("Usage: pia [filename]\n");
-            terminal_writestring("Controls: Ctrl+S (save), Ctrl+Q (quit), F1 (help)\n");
-        }
-        else if (strcmp(args, "ipconfig") == 0) {
-            terminal_writestring("ipconfig - Network configuration\n");
-            terminal_writestring("Usage: ipconfig [show|set]\n");
-        }
-        else if (strcmp(args, "ping") == 0) {
-            terminal_writestring("ping - Send ICMP ping\n");
-            terminal_writestring("Usage: ping <ip_address>\n");
-            terminal_writestring("Example: ping 192.168.1.1\n");
-        }
-        else if (strcmp(args, "dhcp") == 0) {
-            terminal_writestring("dhcp - DHCP client control\n");
-            terminal_writestring("Usage: dhcp [start|stop|status]\n");
-        }
-        else if (strcmp(args, "netstat") == 0) {
-            terminal_writestring("netstat - Display network status\n");
-            terminal_writestring("Usage: netstat\n");
-        }
-        else if (strcmp(args, "install") == 0) {
-            terminal_writestring("install - install the OS on the Hard Drive\n");
-            terminal_writestring("Usage: install [start]\n");
-        }
-        else {
-            terminal_writestring("Unknown command: ");
+    if (!args || !*args) {
+        // General help
+        terminal_writestring("SyncWideOS Command Help\n");
+        terminal_writestring("=======================\n\n");
+        
+        terminal_writestring("File Operations:\n");
+        terminal_writestring("  ls [path]           - List directory contents\n");
+        terminal_writestring("  cd <path>           - Change directory\n");
+        terminal_writestring("  pwd                 - Print working directory\n");
+        terminal_writestring("  mkdir <name>        - Create directory\n");
+        terminal_writestring("  read <file>         - Read file contents\n");
+        terminal_writestring("  cat <file>          - Read file contents (alias for read)\n");
+        terminal_writestring("  write <file> <text> - Write text to file\n");
+        terminal_writestring("  touch <file>        - Create empty file\n");
+        terminal_writestring("  cp <src> <dst>      - Copy file\n");
+        terminal_writestring("  mv <src> <dst>      - Move/rename file\n");
+        terminal_writestring("  rm <file>           - Delete file\n");
+        terminal_writestring("  pia [file]          - Text editor\n\n");
+        
+        terminal_writestring("System Commands:\n");
+        terminal_writestring("  help [command]      - Show help information\n");
+        terminal_writestring("  clear               - Clear screen\n");
+        terminal_writestring("  echo <text>         - Display text\n");
+        terminal_writestring("  echo <text> > <file> - Write text to file\n");
+        terminal_writestring("  echo <text> >> <file> - Append text to file\n");
+        terminal_writestring("  system [info]       - Show system information\n");
+        terminal_writestring("  mount               - Mount FAT32 filesystem\n");
+        terminal_writestring("  unmount             - Unmount filesystem\n");
+        terminal_writestring("  fsinfo              - Show filesystem information\n\n");
+        
+        terminal_writestring("Network Commands:\n");
+        terminal_writestring("  ipconfig            - Show network configuration\n");
+        terminal_writestring("  ping <ip>           - Ping an IP address\n");
+        terminal_writestring("  dhcp                - Request DHCP configuration\n");
+        terminal_writestring("  netstat             - Show network status\n");
+        terminal_writestring("  install <package>   - Install network package\n\n");
+        
+        terminal_writestring("Type 'help <command>' for detailed information about a specific command.\n");
+    } else {
+        // Specific command help
+        if (strcmp(args, "write") == 0) {
+            terminal_writestring("write - Write text to a file\n\n");
+            terminal_writestring("Usage:\n");
+            terminal_writestring("  write <filename> <content>\n");
+            terminal_writestring("  write <filename>           (interactive mode)\n\n");
+            terminal_writestring("Examples:\n");
+            terminal_writestring("  write hello.txt \"Hello, World!\"\n");
+            terminal_writestring("  write config.txt \"debug=true\"\n");
+        } else if (strcmp(args, "touch") == 0) {
+            terminal_writestring("touch - Create an empty file\n\n");
+            terminal_writestring("Usage:\n");
+            terminal_writestring("  touch <filename>\n\n");
+            terminal_writestring("Examples:\n");
+            terminal_writestring("  touch newfile.txt\n");
+            terminal_writestring("  touch data.log\n");
+                } else if (strcmp(args, "cp") == 0) {
+            terminal_writestring("cp - Copy files\n\n");
+            terminal_writestring("Usage:\n");
+            terminal_writestring("  cp <source> <destination>\n\n");
+            terminal_writestring("Examples:\n");
+            terminal_writestring("  cp file1.txt file2.txt\n");
+            terminal_writestring("  cp data.log backup.log\n");
+        } else if (strcmp(args, "mv") == 0) {
+            terminal_writestring("mv - Move/rename files\n\n");
+            terminal_writestring("Usage:\n");
+            terminal_writestring("  mv <source> <destination>\n\n");
+            terminal_writestring("Examples:\n");
+            terminal_writestring("  mv oldname.txt newname.txt\n");
+            terminal_writestring("  mv temp.log archive.log\n");
+        } else if (strcmp(args, "rm") == 0) {
+            terminal_writestring("rm - Remove files\n\n");
+            terminal_writestring("Usage:\n");
+            terminal_writestring("  rm <filename>\n\n");
+            terminal_writestring("Examples:\n");
+            terminal_writestring("  rm unwanted.txt\n");
+            terminal_writestring("  rm temp.log\n\n");
+            terminal_writestring("Warning: This permanently deletes the file!\n");
+        } else if (strcmp(args, "echo") == 0) {
+            terminal_writestring("echo - Display text or write to files\n\n");
+            terminal_writestring("Usage:\n");
+            terminal_writestring("  echo <text>              - Display text\n");
+            terminal_writestring("  echo <text> > <file>     - Write text to file (overwrite)\n");
+            terminal_writestring("  echo <text> >> <file>    - Append text to file\n\n");
+            terminal_writestring("Examples:\n");
+            terminal_writestring("  echo \"Hello World\"\n");
+            terminal_writestring("  echo \"Log entry\" >> system.log\n");
+            terminal_writestring("  echo \"New content\" > output.txt\n");
+        } else if (strcmp(args, "pia") == 0) {
+            terminal_writestring("pia - PIA Text Editor\n\n");
+            terminal_writestring("Usage:\n");
+            terminal_writestring("  pia [filename]          - Open editor (optionally with file)\n\n");
+            terminal_writestring("Editor Controls:\n");
+            terminal_writestring("  Ctrl+S                  - Save file\n");
+            terminal_writestring("  Ctrl+Q                  - Quit editor\n");
+            terminal_writestring("  F1                      - Toggle help menu\n");
+            terminal_writestring("  Arrow keys              - Navigate\n");
+            terminal_writestring("  Backspace               - Delete character\n");
+            terminal_writestring("  Enter                   - New line\n\n");
+            terminal_writestring("Examples:\n");
+            terminal_writestring("  pia                     - Open empty editor\n");
+            terminal_writestring("  pia myfile.txt          - Open/create myfile.txt\n");
+        } else {
+            terminal_writestring("No help available for command: ");
             terminal_writestring(args);
             terminal_writestring("\n");
             terminal_writestring("Type 'help' for a list of available commands.\n");
         }
-    } else {
-        // General help
-        terminal_setcolor(vga_entry_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
-        terminal_writestring("SyncWide OS - Available Commands:\n\n");
-        terminal_setcolor(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
-        
-        terminal_writestring("System Commands:\n");
-        terminal_writestring("  help [command]  - Show help information\n");
-        terminal_writestring("  clear           - Clear the screen\n");
-        terminal_writestring("  echo <text>     - Display text\n");
-        terminal_writestring("  system [info]   - Show system information\n\n");
-        terminal_writestring("  install        - Install SyncWide OS to hard drive\n");
-        
-        terminal_writestring("Filesystem Commands:\n");
-        terminal_writestring("  ls [path]       - List directory contents\n");
-        terminal_writestring("  cd <path>       - Change directory\n");
-        terminal_writestring("  pwd             - Print working directory\n");
-        terminal_writestring("  mkdir <name>    - Create directory\n");
-        terminal_writestring("  read <file>     - Display file contents\n");
-        terminal_writestring("  cat <file>      - Display file contents (alias for read)\n");
-        terminal_writestring("  mount           - Mount FAT32 filesystem\n");
-        terminal_writestring("  umount          - Unmount filesystem\n");
-        terminal_writestring("  fsinfo          - Show filesystem information\n\n");
-        
-        terminal_writestring("Text Editor:\n");
-        terminal_writestring("  pia [file]      - Open text editor\n\n");
-        
-        terminal_writestring("Network Commands:\n");
-        terminal_writestring("  ipconfig        - Network configuration\n");
-        terminal_writestring("  ping <ip>       - Send ICMP ping\n");
-        terminal_writestring("  dhcp [cmd]      - DHCP client control\n");
-        terminal_writestring("  netstat         - Show network status\n\n");
-        
-        terminal_writestring("Use 'help <command>' for detailed information about a command.\n");
     }
 }

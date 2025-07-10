@@ -35,10 +35,6 @@
 #define FS_MAX_CHILDREN 32
 #define FS_MAX_FILES 256
 
-// Add editor constants
-#define EDITOR_MAX_LINES 1000
-#define EDITOR_MAX_COLS 256
-
 // Legacy filesystem types (for backward compatibility)
 typedef enum {
     FS_TYPE_FILE,
@@ -157,8 +153,13 @@ typedef struct {
     fat32_boot_sector_t boot_sector; // Boot sector
 } fat32_fs_t;
 
+// Current working directory structure
+typedef struct {
+    uint32_t cluster;               // Current directory cluster
+    char path[FS_MAX_PATH_LENGTH];  // Current path string
+} fs_cwd_t;
+
 // Legacy filesystem interface (for backward compatibility)
-bool fs_init(void);
 fs_node_t* fs_create_directory(fs_node_t* parent, const char* name);
 fs_node_t* fs_create_file(fs_node_t* parent, const char* name);
 fs_node_t* fs_find_node(fs_node_t* parent, const char* name);
@@ -171,6 +172,7 @@ bool fs_write_file(fs_node_t* file, const char* content);
 void fs_create_sample_images(void);
 
 // FAT32 filesystem interface
+bool fs_init(void);
 bool fs_mount(void);
 void fs_unmount(void);
 
@@ -186,6 +188,8 @@ uint32_t fs_tell(fs_file_handle_t* handle);
 bool fs_mkdir(const char* path);
 bool fs_rmdir(const char* path);
 bool fs_list_directory(const char* path, void (*callback)(const char* name, bool is_dir, uint32_t size));
+bool fs_chdir(const char* path);
+const char* fs_getcwd(void);
 
 // File management
 bool fs_delete(const char* path);
@@ -205,5 +209,9 @@ uint32_t fat32_allocate_cluster(void);
 bool fat32_free_cluster_chain(uint32_t start_cluster);
 bool fat32_read_cluster(uint32_t cluster, void* buffer);
 bool fat32_write_cluster(uint32_t cluster, const void* buffer);
+
+// Storage interface (implemented by storage driver)
+bool storage_read_sectors(uint32_t sector, uint32_t count, void* buffer);
+bool storage_write_sectors(uint32_t sector, uint32_t count, const void* buffer);
 
 #endif /* FILESYSTEM_H */

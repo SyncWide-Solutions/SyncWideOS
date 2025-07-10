@@ -52,5 +52,6 @@ void terminal_writestring(const char* data);
 void terminal_scroll(void);
 void update_cursor(int row, int col);
 void terminal_backspace(void);
+void terminal_clear(void);
 
 #endif /* VGA_H */

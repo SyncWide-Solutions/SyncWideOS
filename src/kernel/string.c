@@ -8,180 +8,194 @@ size_t strlen(const char* str) {
 }
 
 char* strcpy(char* dest, const char* src) {
-    char* original_dest = dest;
+    char* orig_dest = dest;
     while ((*dest++ = *src++));
-    return original_dest;
+    return orig_dest;
 }
 
 char* strncpy(char* dest, const char* src, size_t n) {
     size_t i;
-    
-    for (i = 0; i < n && src[i] != '\0'; i++) {
+    for (i = 0; i < n && src[i] != '\0'; i++)
         dest[i] = src[i];
-    }
-    
-    // Pad with zeros if necessary
-    for (; i < n; i++) {
+    for (; i < n; i++)
         dest[i] = '\0';
-    }
-    
     return dest;
 }
 
-int strcmp(const char* s1, const char* s2) {
-    while (*s1 && (*s1 == *s2)) {
-        s1++;
-        s2++;
+int strcmp(const char* str1, const char* str2) {
+    while (*str1 && (*str1 == *str2)) {
+        str1++;
+        str2++;
     }
-    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+    return *(unsigned char*)str1 - *(unsigned char*)str2;
 }
 
-int strncmp(const char* s1, const char* s2, size_t n) {
-    while (n && *s1 && (*s1 == *s2)) {
-        ++s1;
-        ++s2;
+int strncmp(const char* str1, const char* str2, size_t n) {
+    while (n && *str1 && (*str1 == *str2)) {
+        ++str1;
+        ++str2;
         --n;
     }
     if (n == 0) {
         return 0;
+    } else {
+        return (*(unsigned char*)str1 - *(unsigned char*)str2);
     }
-    return (*(unsigned char*)s1 - *(unsigned char*)s2);
 }
 
 char* strcat(char* dest, const char* src) {
-    char* ptr = dest + strlen(dest);
-    while (*src != '\0') {
-        *ptr++ = *src++;
-    }
-    *ptr = '\0';
-    return dest;
+    char* orig_dest = dest;
+    while (*dest) dest++;
+    while ((*dest++ = *src++));
+    return orig_dest;
 }
 
-char* strrchr(const char* str, int ch) {
-    char* last_occurrence = NULL;
+char* strncat(char* dest, const char* src, size_t n) {
+    char* orig_dest = dest;
+    while (*dest) dest++;
     
+    while (n > 0 && *src) {
+        *dest++ = *src++;
+        n--;
+    }
+    *dest = '\0';
+    
+    return orig_dest;
+}
+
+char* strchr(const char* str, int c) {
+    while (*str != (char)c) {
+        if (!*str++) {
+            return NULL;
+        }
+    }
+    return (char*)str;
+}
+
+char* strrchr(const char* str, int c) {
+    char* last = NULL;
     while (*str) {
-        if (*str == (char)ch) {
-            last_occurrence = (char*)str;
+        if (*str == (char)c) {
+            last = (char*)str;
         }
         str++;
     }
-    
-    return last_occurrence;
+    return last;
 }
 
-void* memset(void* s, int c, size_t n) {
-    unsigned char* p = (unsigned char*)s;
-    while (n--) {
-        *p++ = (unsigned char)c;
+char* strstr(const char* haystack, const char* needle) {
+    if (!haystack || !needle) {
+        return NULL;
     }
-    return s;
-}
-
-void* memcpy(void* dest, const void* src, size_t n) {
-    unsigned char* d = (unsigned char*)dest;
-    const unsigned char* s = (const unsigned char*)src;
-    while (n--) {
-        *d++ = *s++;
-    }
-    return dest;
-}
-
-void* memmove(void* dest, const void* src, size_t n) {
-    unsigned char* d = (unsigned char*)dest;
-    const unsigned char* s = (const unsigned char*)src;
     
-    if (d < s) {
-        // Copy from start to end
-        while (n--) {
-            *d++ = *s++;
+    if (*needle == '\0') {
+        return (char*)haystack;
+    }
+    
+    size_t needle_len = strlen(needle);
+    
+    while (*haystack) {
+        if (strncmp(haystack, needle, needle_len) == 0) {
+            return (char*)haystack;
         }
-    } else if (d > s) {
-        // Copy from end to start to handle overlapping regions
-        d += n - 1;
-        s += n - 1;
-        while (n--) {
-            *d-- = *s--;
-        }
+        haystack++;
     }
     
-    return dest;
+    return NULL;
 }
 
-int memcmp(const void* s1, const void* s2, size_t n) {
-    const unsigned char* p1 = (const unsigned char*)s1;
-    const unsigned char* p2 = (const unsigned char*)s2;
-    
-    while (n--) {
-        if (*p1 != *p2) {
-            return *p1 - *p2;
-        }
-        p1++;
-        p2++;
-    }
-    
-    return 0;
-}
-
-// If itoa is not already implemented, add it here
+// Convert integer to string
 char* itoa(int value, char* str, int base) {
-    char* rc;
-    char* ptr;
-    char* low;
-    
-    // Check for supported base
+    char* ptr = str;
+    char* ptr1 = str;
+    char tmp_char;
+    int tmp_value;
+
+    // Handle invalid base
     if (base < 2 || base > 36) {
         *str = '\0';
         return str;
     }
-    
-    rc = ptr = str;
-    
-    // Set '-' for negative decimals
+
+    // Handle negative numbers for base 10
     if (value < 0 && base == 10) {
         *ptr++ = '-';
+        value = -value;
+        ptr1++;
     }
-    
-    // Remember where the numbers start
-    low = ptr;
-    
-    // The actual conversion
+
+    // Convert to string (in reverse order)
     do {
-        // Modulo is negative for negative value, this trick makes abs() unnecessary
-        *ptr++ = "0123456789abcdefghijklmnopqrstuvwxyz"[((value % base) < 0 ? -(value % base) : (value % base))];
+        tmp_value = value;
         value /= base;
+        *ptr++ = "0123456789abcdefghijklmnopqrstuvwxyz"[tmp_value - value * base];
     } while (value);
-    
-    // Terminating the string
+
+    // Null terminate
     *ptr-- = '\0';
-    
-    // Invert the numbers
-    while (low < ptr) {
-        char tmp = *low;
-        *low++ = *ptr;
-        *ptr-- = tmp;
+
+    // Reverse string (excluding sign)
+    while (ptr1 < ptr) {
+        tmp_char = *ptr;
+        *ptr-- = *ptr1;
+        *ptr1++ = tmp_char;
     }
-    
-    return rc;
+
+    return str;
 }
 
+// Convert string to integer
 int atoi(const char* str) {
     int result = 0;
     int sign = 1;
     int i = 0;
-    
-    if (str[0] == '-') {
+
+    // Skip whitespace
+    while (str[i] == ' ' || str[i] == '\t' || str[i] == '\n' || 
+           str[i] == '\r' || str[i] == '\f' || str[i] == '\v') {
+        i++;
+    }
+
+    // Handle sign
+    if (str[i] == '-') {
         sign = -1;
-        i = 1;
+        i++;
+    } else if (str[i] == '+') {
+        i++;
     }
-    
-    for (; str[i] != '\0'; i++) {
-        if (str[i] >= '0' && str[i] <= '9') {
-            result = result * 10 + (str[i] - '0');
-        } else {
-            break;
-        }
+
+    // Convert digits
+    while (str[i] >= '0' && str[i] <= '9') {
+        result = result * 10 + (str[i] - '0');
+        i++;
     }
-    
+
     return sign * result;
+}
+
+void* memset(void* ptr, int value, size_t num) {
+    unsigned char* p = ptr;
+    while (num--)
+        *p++ = (unsigned char)value;
+    return ptr;
+}
+
+void* memcpy(void* dest, const void* src, size_t n) {
+    char* d = dest;
+    const char* s = src;
+    while (n--)
+        *d++ = *s++;
+    return dest;
+}
+
+int memcmp(const void* ptr1, const void* ptr2, size_t num) {
+    const unsigned char* p1 = ptr1;
+    const unsigned char* p2 = ptr2;
+    while (num--) {
+        if (*p1 != *p2)
+            return *p1 - *p2;
+        p1++;
+        p2++;
+    }
+    return 0;
 }

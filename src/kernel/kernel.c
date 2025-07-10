@@ -64,8 +64,6 @@ uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
 char current_command[MAX_COMMAND_LENGTH];
 size_t command_length = 0;
 
-// Remove the memory_init() function from here - it's defined in memory.c
-
 void terminal_initialize(void) 
 {
     terminal_row = 0;
@@ -119,7 +117,6 @@ void terminal_scroll(void) {
     update_cursor(terminal_row, terminal_column);
 }
 
-// Add this helper function before kernel_main()
 void terminal_backspace(void) {
     if (terminal_column > 0) {
         // Normal backspace within the same line
@@ -196,10 +193,6 @@ void update_cursor(int row, int col) {
     outb(0x3D5, (unsigned char)((position >> 8) & 0xFF));
 }
 
-// External function from cd.c
-extern const char* fs_get_current_directory(void);
-
-// Function declarations
 void print_prompt(void) {
     terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
     terminal_writestring("admin@syncwideos");
@@ -207,13 +200,8 @@ void print_prompt(void) {
     terminal_writestring(":");
     
     // Get the current directory path
-    if (fs_is_mounted()) {
-        terminal_setcolor(VGA_COLOR_CYAN);
-        terminal_writestring(fs_get_current_directory());
-    } else {
-        terminal_setcolor(VGA_COLOR_CYAN);
-        terminal_writestring("~");
-    }
+    terminal_setcolor(VGA_COLOR_CYAN);
+    terminal_writestring(fs_getcwd());
     
     terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     terminal_writestring("$ ");
@@ -302,6 +290,63 @@ void process_command(const char* cmd) {
         return;
     }
 
+        // New file operation commands
+    if (strncmp(cmd, "write", cmd_length) == 0 && cmd_length == 5) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_write(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "touch", cmd_length) == 0 && cmd_length == 5) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_touch(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "cp", cmd_length) == 0 && cmd_length == 2) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_cp(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "rm", cmd_length) == 0 && cmd_length == 2) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_rm(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "mv", cmd_length) == 0 && cmd_length == 2) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_mv(args);
+        print_prompt();
+        return;
+    }
+
+     if (strncmp(cmd, "tee", cmd_length) == 0 && cmd_length == 3) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_tee(args);
+        print_prompt();
+        return;
+    }
+
+    if (strncmp(cmd, "wc", cmd_length) == 0 && cmd_length == 2) {
+        const char* args = cmd_end;
+        while (*args == ' ') args++;
+        cmd_wc(args);
+        print_prompt();
+        return;
+    }
+
     // Alternative command for reading files
     if (strncmp(cmd, "cat", cmd_length) == 0 && cmd_length == 3) {
         const char* args = cmd_end;
@@ -348,7 +393,7 @@ void process_command(const char* cmd) {
             uint32_t free_space = fs_get_free_space();
             
             terminal_writestring("Total space: ");
-            // Simple size display (you can improve this)
+            // Simple size display
             char size_str[32];
             uint32_t mb = total_space / (1024 * 1024);
             // Simple number to string
@@ -403,7 +448,7 @@ void process_command(const char* cmd) {
         return;
     }
 
-    // Network commands (existing)
+    // Network commands
     if (strncmp(cmd, "ipconfig", cmd_length) == 0 && cmd_length == 8) {
         const char* args = cmd_end;
         while (*args == ' ') args++;
@@ -485,20 +530,15 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
     terminal_writestring("Initializing disk subsystem...\n");
     disk_init();
 
-    // Initialize filesystem
-    terminal_writestring("Initializing filesystem...\n");
-    fs_init();
-    
-    // Try to mount the filesystem
-    terminal_writestring("Mounting FAT32 filesystem...\n");
-    if (fs_mount()) {
+    // Initialize FAT32 filesystem
+    terminal_writestring("Initializing FAT32 filesystem...\n");
+    if (fs_init()) {
         terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
-        terminal_writestring("FAT32 filesystem mounted successfully.\n");
+        terminal_writestring("FAT32 filesystem initialized and mounted successfully.\n");
         terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     } else {
         terminal_setcolor(VGA_COLOR_BROWN);
-        terminal_writestring("Failed to mount FAT32 filesystem.\n");
-        terminal_writestring("Filesystem commands will be limited.\n");
+        terminal_writestring("Failed to initialize FAT32 filesystem.\n");
         terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     }
     
@@ -520,7 +560,7 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
         terminal_setcolor(VGA_COLOR_LIGHT_GREEN);
         terminal_writestring("Network initialized successfully.\n");
         terminal_setcolor(VGA_COLOR_LIGHT_GREY);
-        
+                
         // Show network configuration
         terminal_writestring("IP Address: 192.168.1.100\n");
         terminal_writestring("Gateway: 192.168.1.1\n");
@@ -539,7 +579,7 @@ void kernel_main(uint32_t magic, multiboot_info_t* mbd) {
         terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     } else {
         terminal_setcolor(VGA_COLOR_BROWN);
-        terminal_writestring("No filesystem mounted. Use 'mount' to mount FAT32.\n");
+        terminal_writestring("FAT32 filesystem not available.\n");
         terminal_setcolor(VGA_COLOR_LIGHT_GREY);
     }
     

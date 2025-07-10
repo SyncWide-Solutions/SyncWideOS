@@ -27,9 +27,6 @@ int is_image_file(const char* filename) {
 
 // Simple ASCII art renderer for image files
 void render_image_ascii(const char* content) {
-    // This is a simplified renderer that assumes the image content
-    // contains special formatting with pixel data
-    
     terminal_writestring("ASCII Image Rendering:\n\n");
     
     uint8_t original_color = terminal_getcolor();
@@ -58,7 +55,7 @@ void render_image_ascii(const char* content) {
     }
     
     // Restore original color
-    terminal_setcolor(original_color);
+        terminal_setcolor(original_color);
 }
 
 void cmd_read(const char* args) {
@@ -72,62 +69,63 @@ void cmd_read(const char* args) {
     }
     
     // Check if FAT32 is mounted
-    if (fs_is_mounted()) {
-        // Try to read from FAT32 filesystem
-        fs_file_handle_t* handle = fs_open(args, "r");  // Added mode parameter
-        if (!handle) {
-            terminal_writestring("Error: File not found in FAT32 filesystem: ");
-            terminal_writestring(args);
-            terminal_writestring("\n");
-            return;
-        }
-        
-        // Read file content
-        char buffer[1024];
-        size_t bytes_read = fs_read(handle, buffer, sizeof(buffer) - 1);
-        buffer[bytes_read] = '\0';
-        
-        terminal_writestring("--- File: ");
-        terminal_writestring(args);
-        terminal_writestring(" (FAT32) ---\n");
-        terminal_writestring(buffer);
-        terminal_writestring("\n--- End of file ---\n");
-        
-        fs_close(handle);
+    if (!fs_is_mounted()) {
+        terminal_writestring("read: FAT32 filesystem not mounted\n");
         return;
     }
     
-    // Use legacy filesystem
-    fs_node_t* file = fs_find_node_by_path(args);
-    
-    if (!file) {
+    // Try to read from FAT32 filesystem
+    fs_file_handle_t* handle = fs_open(args, "r");
+    if (!handle) {
         terminal_writestring("Error: File not found: ");
         terminal_writestring(args);
         terminal_writestring("\n");
         return;
     }
     
-    // Check if it's a file (not a directory)
-    if (file->type != FS_TYPE_FILE) {
-        terminal_writestring("Error: Not a file: ");
+    if (handle->is_directory) {
+        terminal_writestring("Error: Cannot read directory: ");
         terminal_writestring(args);
         terminal_writestring("\n");
+        fs_close(handle);
         return;
     }
     
-    // Display the file contents
+    // Read file content
+    char buffer[1024];
+    size_t total_read = 0;
+    size_t bytes_read;
+    
     terminal_writestring("--- File: ");
     terminal_writestring(args);
-    terminal_writestring(" (Legacy) ---\n");
+    terminal_writestring(" ---\n");
     
     // Check if it's an image file
     if (is_image_file(args)) {
         terminal_writestring("Detected image file. Rendering...\n");
-        render_image_ascii(file->content);
+        
+        // Read entire file for image rendering
+        char image_buffer[4096] = {0};
+        size_t image_pos = 0;
+        
+        while ((bytes_read = fs_read(handle, buffer, sizeof(buffer))) > 0 && 
+               image_pos < sizeof(image_buffer) - 1) {
+            for (size_t i = 0; i < bytes_read && image_pos < sizeof(image_buffer) - 1; i++) {
+                image_buffer[image_pos++] = buffer[i];
+            }
+        }
+        image_buffer[image_pos] = '\0';
+        
+        render_image_ascii(image_buffer);
     } else {
-        // Regular text file
-        terminal_writestring(file->content);
+        // Regular text file - read and display in chunks
+        while ((bytes_read = fs_read(handle, buffer, sizeof(buffer) - 1)) > 0) {
+            buffer[bytes_read] = '\0';
+            terminal_writestring(buffer);
+            total_read += bytes_read;
+        }
     }
     
     terminal_writestring("\n--- End of file ---\n");
+    fs_close(handle);
 }

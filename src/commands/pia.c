@@ -30,7 +30,7 @@ extern size_t terminal_column;
 #define KEY_CTRL_O 15
 #define KEY_CTRL_Q 17
 
-// Editor constants (moved from filesystem.h since they're editor-specific)
+// Editor constants
 #define EDITOR_MAX_LINES 1000
 #define EDITOR_MAX_COLS 256
 
@@ -43,7 +43,7 @@ typedef struct {
     int scroll_y;
     int lines;
     bool modified;
-    char filename[256]; // Use a reasonable size instead of FS_MAX_NAME_LENGTH
+    char filename[256];
     bool has_filename;
     bool help_menu_open;
 } editor_state_t;
@@ -90,7 +90,7 @@ void editor_load_file(const char* filename) {
     
     // Check if filesystem is mounted
     if (!fs_is_mounted()) {
-        terminal_writestring("Error: Filesystem not mounted\n");
+        terminal_writestring("Error: FAT32 filesystem not mounted\n");
         return;
     }
     
@@ -114,7 +114,7 @@ void editor_load_file(const char* filename) {
     }
     
     if (file->is_directory) {
-        terminal_writestring("Error: Not a file\n");
+        terminal_writestring("Error: Cannot edit directory\n");
         fs_close(file);
         return;
     }
@@ -151,39 +151,17 @@ void editor_save_file(void) {
     }
     
     if (!fs_is_mounted()) {
-        terminal_writestring("Error: Filesystem not mounted\n");
+        terminal_writestring("Error: FAT32 filesystem not mounted\n");
         return;
     }
     
-    // Note: Since we haven't implemented file writing in FAT32 yet,
-    // this will show an error message
+    // Note: File writing is not fully implemented in FAT32 yet
     terminal_writestring("Error: File writing not yet implemented in FAT32\n");
     terminal_writestring("File would be saved as: ");
     terminal_writestring(editor_state.filename);
     terminal_writestring("\n");
     
-    // TODO: Implement this when fs_write is available
-    /*
-    fs_file_handle_t* file = fs_open(editor_state.filename, "w");
-    if (!file) {
-        terminal_writestring("Error: Could not create file\n");
-        return;
-    }
-    
-    // Convert buffer to string and write
-    for (int line = 0; line < editor_state.lines; line++) {
-        fs_write(file, editor_state.buffer[line], strlen(editor_state.buffer[line]));
-        if (line < editor_state.lines - 1) {
-            fs_write(file, "\n", 1);
-        }
-    }
-    
-    fs_close(file);
-    editor_state.modified = false;
-    terminal_writestring("File saved: ");
-    terminal_writestring(editor_state.filename);
-    terminal_writestring("\n");
-    */
+    // TODO: Implement this when fs_write is fully available
 }
 
 char editor_get_key(void) {
@@ -292,7 +270,7 @@ void editor_handle_key(char key) {
             if (editor_state.cursor_y >= editor_state.lines) {
                 editor_state.lines = editor_state.cursor_y + 1;
             }
-            editor_state.modified = true;
+                        editor_state.modified = true;
         }
     } else if (key == '\b') {
         // Backspace
@@ -352,12 +330,12 @@ void editor_display(void) {
     }
     
     // Display help line
-    const char* help_text = " F1: Open Help Menu";
+    const char* help_text = " F1: Help | Ctrl+S: Save | Ctrl+Q: Quit";
     for (size_t i = 0; i < strlen(help_text) && i < VGA_WIDTH; i++) {
         terminal_putentryat(help_text[i], vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE), i, VGA_HEIGHT - 1);
     }
     
-        // Fill rest of help line
+    // Fill rest of help line
     for (size_t i = strlen(help_text); i < VGA_WIDTH; i++) {
         terminal_putentryat(' ', vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE), i, VGA_HEIGHT - 1);
     }
@@ -406,6 +384,7 @@ void editor_display_help_menu(void) {
     const char* option2 = "Ctrl+O: Open file";
     const char* option3 = "Ctrl+Q: Quit editor";
     const char* option4 = "F1: Toggle this help menu";
+    const char* option5 = "Arrow keys: Navigate";
     
     for (size_t i = 0; i < strlen(option1) && start_x + 2 + i < VGA_WIDTH; i++) {
         terminal_putentryat(option1[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 4);
@@ -421,6 +400,10 @@ void editor_display_help_menu(void) {
     
     for (size_t i = 0; i < strlen(option4) && start_x + 2 + i < VGA_WIDTH; i++) {
         terminal_putentryat(option4[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 7);
+    }
+    
+    for (size_t i = 0; i < strlen(option5) && start_x + 2 + i < VGA_WIDTH; i++) {
+        terminal_putentryat(option5[i], vga_entry_color(VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY), start_x + 2 + i, start_y + 8);
     }
 }
 

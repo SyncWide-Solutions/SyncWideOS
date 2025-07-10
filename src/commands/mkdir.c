@@ -5,7 +5,7 @@ extern void terminal_writestring(const char* data);
 
 void cmd_mkdir(const char* args) {
     if (!fs_is_mounted()) {
-        terminal_writestring("mkdir: filesystem not mounted\n");
+        terminal_writestring("mkdir: FAT32 filesystem not mounted\n");
         return;
     }
     
@@ -39,6 +39,6 @@ void cmd_mkdir(const char* args) {
     } else {
         terminal_writestring("mkdir: cannot create directory '");
         terminal_writestring(args);
-        terminal_writestring("': Operation failed\n");
+        terminal_writestring("': Operation not supported (FAT32 write operations not implemented)\n");
     }
 }
